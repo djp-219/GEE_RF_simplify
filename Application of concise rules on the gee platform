@@ -1,0 +1,1267 @@
+// 潮滩
+var silt = silt2.merge(silt3).merge(silt5).merge(silt6).merge(silt7).merge(silt8_up).merge(silt9_up).merge(silt10_up)
+// var forest = forest1.merge(forest2)
+ 
+
+// print(silt)
+
+// // 定义一个函数，将属性中的所有类型值更改为1
+// var water_bodyTypeTo0 = function(image) {
+//   return image.set('type', 0); 
+// };
+
+// var siltTypeTo1 = function(image) {
+//   return image.set('type', 1);
+// };
+
+// var duneTypeTo2 = function(image) {
+//   return image.set('type', 2);
+// };
+
+// var forestTypeTo3 = function(image) {
+//   return image.set('type', 2);
+// };
+
+// var buildTypeTo4 = function(image) {
+//   return image.set('type', 2);
+// };
+
+// var farmlandTypeTo5 = function(image) {
+//   return image.set('type', 2);
+// };
+
+// // 应用函数到图像或图像集合
+// var water_body = water_body1.merge(wave).map(water_bodyTypeTo0)
+// var silt = silt.map(siltTypeTo1);
+// var dune = silt4.map(duneTypeTo2)
+// var forest = forest.map(forestTypeTo3)
+// var build = build1.map(buildTypeTo4)
+// var farmland = farmland1.map(farmlandTypeTo5)
+
+// Export.table.toDrive({
+//   collection: silt, // 你的样本点 FeatureCollection
+//   description: 'silt', // 文件名
+//   fileFormat: 'csv'
+// });
+
+
+
+// var all = build.merge(water_body).merge(silt).merge(forest).merge(farmland).merge(dune)
+//           .merge(geometry1);
+
+var all = silt
+// Map.centerObject(all, 12);
+  
+var lowTidePoints = silt
+
+var regionImage = silt_sq
+
+var exportName = 'silt'
+
+
+// // 计算交集
+// var intersected = TFMC.map(function(feature) {
+//   var intersection = feature.geometry().intersection(regionImage, ee.ErrorMargin(1));
+//   return feature.setGeometry(intersection);
+// });
+
+// print(intersected)
+// // 导出交集结果
+// Export.table.toDrive({
+//   collection: intersected,
+//   description: exportName + '_2020_TFMC',
+//   fileFormat: 'shp',
+//   folder: 'TF_compare_2020'
+// });
+
+// 定义时间范围
+var startDate = ee.Date('2023-1-1')   
+var endDate =  startDate.advance(1, 'year');
+
+
+var startDateS1 = ee.Date('2019-1-1'); 
+var endDateS1 =  startDateS1.advance(3, 'year');
+// 获取Sentinel-1影像集
+var sentinel = ee.ImageCollection('COPERNICUS/S1_GRD')
+  .filterBounds(all.geometry())
+  // .filterDate(startDateS1, endDateS1)
+      // 筛选几何点都在影像内
+    // .filter(filterContainsPoint)
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+  .select(['VV', 'VH'])
+
+ 
+//计算像素的分位数
+var Image_sdwiP10 = sentinel.select('VV').reduce(ee.Reducer.percentile([90]));
+print('Image_sdwiP10', Image_sdwiP10);
+
+// 根据第 10 分位数选择像素并返回其他波段的值
+var Image_sdwiP10_masked = sentinel.map(function(image) {
+  var sdwi = image.select('VV');
+  var mask = sdwi.gt(Image_sdwiP10);
+  return image.updateMask(mask);
+}).select(['VV', 'VH']); // 选择其他波段
+
+print('Image_sdwiP10_masked', Image_sdwiP10_masked);
+
+var compositeImageS1 = Image_sdwiP10_masked.median()
+
+// // 应用SNIC算法进行分割
+// var snicS1 = ee.Algorithms.Image.Segmentation.SNIC({
+//   image: compositeImageS1,
+//   size: 10,  // 超像素的大小
+//   compactness: 0.1,
+//   connectivity: 8,
+//   // neighborhoodSize: 256
+// });
+
+// // 获取原始波段名称
+// var originalBandNames = compositeImageS1.bandNames();
+
+// // 获取生成的平均值波段名称
+// var meanBandNames = originalBandNames.map(function(name) {
+//   return ee.String(name).cat('_mean');
+// });
+
+// // 重命名平均值波段为原始波段名称
+// var snicWithOriginalNames = snicS1.select(meanBandNames, originalBandNames);
+
+// compositeImageS1 = snicWithOriginalNames
+
+// function addVVMean(image){
+//   var vv = image.select('VV')
+//   var vh = image.select('VH')
+  
+//   var vvMean = image.select('VV').reduceRegion({
+//     reducer: ee.Reducer.mean(),
+//     geometry: lowTidePoints,
+//     scale: 10 // 适当的分辨率
+//   });
+  
+//   return image.set('VV_mean', vvMean.get('VV'))
+// }
+
+
+// var sentinelWithVHMean = sentinel.map(addVVMean);
+
+// print('sentinelWithVHMean',sentinelWithVHMean)
+
+// // 按照平均值排序
+// var sortedSentinel = sentinelWithVHMean.sort('VV_mean');
+// print('sortedSentinel',sortedSentinel)
+
+// // 计算前10%影像的中值合成影像
+// var count = sortedSentinel.size().getInfo();
+// var top10percentCount = Math.ceil(count * 0.1);
+// // var top10percentImages = sortedSentinel.toList(top10percentCount);
+
+// // 获取前 10% 的影像
+// var topImages = sortedSentinel.limit(top10percentCount);
+
+// var compositeImageS1 = ee.Image(topImages.reduce(ee.Reducer.median()));
+
+// var compositeImageName = compositeImageS1.bandNames()
+
+// // 获取第一幅影像的波段名称
+// var originalBands = topImages.first().bandNames();
+
+// // 将合成图像的波段名称设置为原始影像的波段名称
+// compositeImageS1 = compositeImageS1.select(compositeImageName,originalBands);
+// print('compositeImageS1',compositeImageS1)
+
+// Map.addLayer(compositeImageS1, {bands: ['VV', 'VH', 'VV'], min: -25, max: 5}, 'Median Composite')
+
+function addIndexS1(image){
+  var vv = image.select('VV')
+  var vh = image.select('VH')
+  
+  // // 计算 ln(10 * VV * VH)
+  // var SDWI = ((vv.multiply(vh).multiply(10)).log()).subtract(8).rename("SDWI").toDouble();
+  
+  // // 计算 EXP(VV * VH / 1000)
+  // var expResult = vv.multiply(vh).divide(1000).exp().rename("expResult").toDouble();
+  
+  var SAR_Sum = vv.add(vh).rename("SAR_Sum").toDouble()
+  var SAR_Diff1 = vh.subtract(vv).rename("VH-VV").toDouble()
+  // var SAR_Diff2 = vv.subtract(vh).rename("VV-VH").toDouble()
+  var SAR_NDVI1 = (vv.subtract(vh)).divide(vv.add(vh)).rename("VV_VH").toDouble();
+  // var SAR_NDVI2 = (vh.subtract(vv)).divide(vh.add(vv)).rename("VH_VV").toDouble();
+  var vv_vh = vv.divide(vh).rename("VV/VH").toDouble()
+  var vh_vv = vh.divide(vv).rename("VH/VV").toDouble()
+return image.addBands(SAR_NDVI1).addBands(SAR_Sum).addBands(SAR_Diff1)
+            .addBands(vv_vh).addBands(vh_vv)
+// .addBands(expResult).addBands(SDWI).addBands(SAR_NDVI2).addBands(SAR_Diff2)
+}
+var sentinel1Index = addIndexS1(compositeImageS1)
+
+// Sentinel-1 纹理计算
+// 计算 VV 波段的 GLCM 统计数据
+var glcmS1 = compositeImageS1.select(['VV','VH']).toInt32().glcmTexture({
+  size: 5, // 窗口大小为 7x7
+  average: true // 计算平均值
+});
+
+var  texture = glcmS1.select(['VV_var', 'VH_var', 'VV_contrast', 'VH_contrast','VV_corr', 'VH_corr'])
+// print('texture',texture)
+
+// 计算拉普拉斯滤波器
+// 定义Laplacian滤波器
+var laplacianFilter = ee.Kernel.laplacian8();
+
+// 应用Laplacian滤波器
+var laplacianS1 = compositeImageS1.select(['VV','VH']).convolve(laplacianFilter);
+
+// 新的波段名称列表，加上"_lap"后缀
+var renamedBands = ['VV','VH'].map(function(band) {
+  return band + '_lap';
+});
+
+// 使用循环重命名每个波段
+laplacianS1 = laplacianS1.select(['VV','VH'], renamedBands);
+
+sentinel1Index = sentinel1Index.addBands(texture.select(texture.bandNames()))
+                               .addBands(laplacianS1)
+print('sentinelIndex',sentinel1Index)
+// Map.addLayer(sentinel1Index, {bands: ['VV', 'VH', 'VV'], min: -25, max: 5}, 'Low Tide Image');
+
+
+
+// 获取Sentinel-2影像集
+// 去云处理，使用云评分+bandQ60
+// Cloud Score+ image collection. Note Cloud Score+ is produced from Sentinel-2
+// Level 1C data and can be applied to either L1C or L2A collections.
+var csPlus = ee.ImageCollection('GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED');
+
+// Use 'cs' or 'cs_cdf', depending on your use-case; see docs for guidance.
+var QA_BAND = 'cs_cdf';
+
+// The threshold for masking; values between 0.50 and 0.65 generally work well.
+// Higher values will remove thin clouds, haze & cirrus shadows.
+var CLEAR_THRESHOLD = 0.6;
+
+// 创建一个过滤器，确保点几何体完全包含在影像边界内
+var filterContainsPoint = ee.Filter.contains({
+  leftField: '.geo',
+  rightValue: all.geometry()
+});
+
+
+// 导入SRTM数字高程模型数据集--创建遮罩dem<5,坡度<5
+var dem = ee.Image("CGIAR/SRTM90_V4");
+// 计算坡度
+var slope = ee.Terrain.slope(dem);
+// 创建 DEM 小于 5 米的遮罩
+var demMask = dem.lt(5);
+// 创建坡度小于 5 度的遮罩
+var slopeMask = slope.lt(15);
+// 组合两个遮罩，取交集
+var combinedMask = demMask//.and(slopeMask);
+
+
+// // 定义多个时间段
+// var periods = [
+//   {start: '2019-9-28', end: '2019-9-29'},
+//   {start: '2019-10-13', end: '2019-10-15'},
+//   {start: '2019-03-12', end: '2019-03-15'},
+//   {start: '2019-8-14', end: '2019-8-15'},
+// ];
+
+// // 初始化空的影像集合
+// var imageCollection = ee.ImageCollection([]);
+
+// // 遍历每个时间段并合并影像集合
+// periods.forEach(function(period) {
+//   var tempCollection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+//     .filterBounds(all.geometry())
+//     .filterDate(period.start, period.end)
+//     .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', 'less_than', 30)
+//         // // 去云处理
+//     .linkCollection(csPlus, [QA_BAND])
+//     .map(function(img) {
+//       return img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD));
+//     })
+    
+//   imageCollection = imageCollection.merge(tempCollection);
+// });
+
+// 获取Sentinel-2影像数据集
+var imageCollection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterBounds(all.geometry())
+    .filterDate(startDate, endDate)
+    .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', 'less_than', 30)
+    // 筛选几何点都在影像内
+    // .filter(filterContainsPoint)
+    // 去云处理
+    .linkCollection(csPlus, [QA_BAND])
+    .map(function(img) {
+      return img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD));
+    })
+    // 筛选几何点都在影像内
+    // .filter(filterContainsPoint)
+    // // 创建遮罩dem<5,坡度<5
+    // .map(function(image) {
+    //   return image.updateMask(combinedMask);
+    // });
+    
+
+    
+print('sentinel-2_image',imageCollection)
+
+// // 筛选云层含量低于50%的影像
+// var filteredImages = imageCollection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50));
+
+// 根据样本NDVI前20%合成中值影像图
+// 定义 NDVI 计算函数
+var calculateNDVI = function(image) {
+  return image.normalizedDifference(['B8', 'B4']).rename('NDVI');
+};
+
+// 计算每一幅影像的 NDVI，并提取样本点的值
+var ndviCollection = imageCollection.map(function(image) {
+  var ndvi = calculateNDVI(image);
+  var ndviValue = ndvi.reduceRegion(ee.Reducer.mean(), lowTidePoints, 10).get('NDVI');
+  return image.set('mean_ndvi', ndviValue);
+});
+
+// 计算样本点 NDVI 的平均值
+var meanNDVI = ndviCollection.aggregate_mean('mean_ndvi');
+
+// 按 NDVI 排序影像集合
+var sortedCollection = ndviCollection.sort('mean_ndvi',false);
+
+// 计算前 10% 的影像数目
+var numImages = sortedCollection.size().getInfo();
+var numImagesToComposite = Math.ceil(8);  //numImages * 0.1
+
+// 获取前 10% 的影像
+var topImages = sortedCollection.limit(numImagesToComposite);
+print('topImages',topImages)
+
+// 定义目标分辨率
+var targetResolution = 10;
+
+// 定义需要执行操作的波段
+var bands_ori = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11', 'B12'];
+
+// 定义重采样函数
+var resampleToTargetResolution = function(img) {
+  // 检查每个波段的分辨率是否是目标分辨率
+  var resampledBands = bands_ori.map(function(band) {
+    var originalResolution = img.select(band).projection().nominalScale();
+    // 如果分辨率不是目标分辨率，则进行重采样
+    if (originalResolution !== targetResolution) {
+      return img.select(band).resample('bilinear').reproject({
+        crs: img.select(band).projection(),
+        scale: targetResolution
+      });
+    } else {
+      return img.select(band);
+    }
+  });
+  
+  // 将重采样后的波段重新组合成图像
+  return ee.Image(resampledBands).copyProperties(img, img.propertyNames());
+};
+
+// 对图像集进行重采样
+topImages = topImages.map(function(image) {
+  return resampleToTargetResolution(image);
+});
+
+// 获取第一幅图像中每个波段的投影信息
+var bandProjections = bands_ori.map(function(band) {
+  return topImages.first().select(band).projection().nominalScale();
+});
+
+// 打印每个波段的分辨率
+print('Band resolutions:', bandProjections.slice(0, 5));
+
+// 取样一个影像以获取形状和地理位置信息
+var sampleImage = topImages.first();
+
+// 复制形状和地理位置信息到 compositeImage
+// 将ImageCollection转换为列表
+var imageList = topImages.toList(topImages.size());
+// var image1 = ee.Image(imageList.get(1))
+
+// var compositeImage = ee.Image(imageList.get(1))
+var compositeImage = ee.Image(ee.Image(topImages.reduce(ee.Reducer.median()))
+  .copyProperties(sampleImage, sampleImage.propertyNames()));
+var compositeImageName = compositeImage.bandNames()
+
+// 获取第一幅影像的波段名称
+var originalBands = topImages.first().bandNames();
+
+// 将合成图像的波段名称设置为原始影像的波段名称
+compositeImage = ee.ImageCollection(ee.Image(compositeImage.select(compositeImageName,originalBands)));
+print('compositeImage',compositeImage)
+
+
+var maskedCollection = compositeImage
+
+// 应用SNIC算法进行分割
+var snic = ee.Algorithms.Image.Segmentation.SNIC({
+  image: compositeImage.first(),
+  size: 10,  // 超像素的大小
+  compactness: 0.1,
+  connectivity: 8,
+  // neighborhoodSize: 256
+});
+
+// 获取原始波段名称
+var originalBandNames = compositeImage.first().bandNames();
+
+// 获取生成的平均值波段名称
+var meanBandNames = originalBandNames.map(function(name) {
+  return ee.String(name).cat('_mean');
+});
+
+// 重命名平均值波段为原始波段名称
+var snicWithOriginalNames = snic.select(meanBandNames, originalBandNames);
+
+var maskedCollection = ee.ImageCollection(snicWithOriginalNames)
+
+//定义计算指数
+function addIndex(image){ 
+  // 添加DEM数据集
+    image = image.addBands(dem);
+
+    // 计算坡度
+    image = image.addBands(slope);
+    
+   // original bands
+    var blue = image.select('B2').rename("blue").toDouble(); 
+    var green  = image.select('B3').rename("green").toDouble();
+    var red = image.select('B4').rename("red").toDouble();
+    var redEdge1 = image.select('B5').rename("redEdge1").toDouble();
+    var redEdge2 = image.select('B6').rename("redEdge2").toDouble();
+    var redEdge3 = image.select('B7').rename("redEdge3").toDouble();
+    var nir = image.select('B8').rename("nir").toDouble();
+    var redEdge4 = image.select('B8A').rename("redEdge4").toDouble();
+    var swir1 = image.select('B11').rename("swir1").toDouble();
+    var swir2 = image.select('B12').rename("swir2").toDouble();
+     
+  var ndvi = image.normalizedDifference(['B8','B4']).rename("NDVI").toDouble();
+  // var ndwi = image.normalizedDifference(['B3','B8']).rename("NDWI").toDouble();
+  
+  var evi = image.expression(
+      '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+        'NIR': nir,
+        'RED': red,
+        'BLUE':blue
+    }).rename("EVI").toDouble();//增强型植被指数（EVI）
+  var rgvi = ((red.subtract(green)).divide(red.add(green))).rename("RGVI").toDouble()//红绿植被指数RGVI
+  var rendvi = ((redEdge2.subtract(redEdge1)).divide(redEdge2.add(redEdge1))).rename("RENDVI").toDouble()//红边归一化植被指数(RENDVI)
+  var reci = ((nir.divide(redEdge1)).subtract(1)).rename("RECI").toDouble()//红边叶绿素指数(RECI)
+  var ndre1 = ((nir.subtract(redEdge1)).divide(nir.add(redEdge1))).rename("NDRE1").toDouble()//归一化差值红边指数（NDRE1）
+  // var salinity = green.divide(red).rename('salinity').toDouble();
+  var ipvi = nir.divide(nir.add(red)).rename("IPVI").toDouble(); //红外植被指数
+  
+  // 计算AWEI
+var awei = image.expression(
+    '(4 * (green - swir1)) - ((0.25 * nir) + (2.75 * swir2))', {
+        'green': green,
+        'swir1': swir1,
+        'nir': nir,
+        'swir2': swir2
+}).rename("AWEI").toDouble();
+
+//   // Add LSWI
+// var lswi = image.normalizedDifference(['B8','B11']).rename("LSWI").toDouble();
+
+// Add Tidalflats
+var mndwi = image.normalizedDifference(['B3','B11']).rename("mNDWI").toDouble();
+var tf = mndwi.multiply(sentinel1Index.select('VH')).rename("TF").toDouble()
+
+// Add SAVI -土壤调整植被指数
+var savi = (nir.subtract(red).multiply(1.5)).divide(nir.add(red).add(0.5)).rename('SAVI').toDouble();
+
+// Add GDVI --广义差异植被指数
+var gdvi = (nir.pow(2).subtract(red.pow(2))).divide(nir.pow(2).add(red.pow(2))).rename('GDVI').toDouble();
+
+// Add EEVI --扩展增强植被指数
+var eevi = (nir.add(swir2).subtract(red))
+            .divide(nir.add(swir2).add(red.multiply(6)).subtract(blue.multiply(7.5)).add(1))
+            .multiply(2.5)
+            .rename('EEVI').toDouble();
+            
+// Add BI --亮度指数         
+var bi = (red.pow(2).add(nir.pow(2))).sqrt().rename('BI').toDouble();
+
+// Add SI -- 盐度指数
+var si = (blue.add(red)).sqrt().rename('SI').toDouble();
+
+// Add mSAVI-增强土壤调整植被指数
+var msavi = image.expression(
+    '((2 * NIR + 1) - sqrt(pow((2 * NIR + 1), 2) - 8 * (NIR - RED))) / 2', {
+        'NIR': nir,
+        'RED': red
+}).rename("MSAVI").toDouble();
+
+// Tasseled Cap Transformation for Soil Brightness-
+var soilBrightness = image.expression(
+    '0.3037 * B2 + 0.2793 * B3 + 0.4743 * B4 + 0.5585 * B8 + 0.5082 * B11 + 0.1863 * B12', {
+        'B2': blue,
+        'B3': green,
+        'B4': red,
+        'B8': nir,
+        'B11': swir1,
+        'B12': swir2
+}).rename("SoilBrightness").toDouble();
+
+// Add bsi --裸土指数
+var bsi = (swir2.add(red).subtract(nir.add(blue))).divide(swir2.add(red).add(nir.add(blue))).rename('BSI').toDouble();
+
+// Add bsi1 --裸土指数
+var bsi1 = (swir1.add(red).subtract(nir.add(blue))).divide(swir1.add(red).add(nir.add(blue))).rename('BSI1').toDouble();
+
+// // Add bsi2 --裸土指数
+// var bsi2 = ((swir2.subtract(green)).divide(swir2.add(green))).sqrt().multiply(100).rename('BSI2').toDouble();
+            
+// Add bsi3 --裸土指数
+var bsi3 = (swir1.add(red).subtract(nir.add(blue))).divide(swir1.add(red).add(nir.add(blue)))
+            .multiply(100).add(100).rename('BSI3').toDouble();
+
+// Add bni --裸露指数            
+var bni = (red.add(swir1).subtract(nir)).rename('BNI').toDouble();
+
+// Add dbsi -- 干裸土指数
+var dbsi = swir1.subtract(green).divide(swir1.add(green))
+            .subtract(nir.subtract(red).divide(nir.add(red)))
+            .rename('DBSI').toDouble();
+            
+// Add ndsi1  --归一化土壤指数1(NDSI1)
+var ndsi1 = image.normalizedDifference(['B11','B8']).rename("NDSI1").toDouble();
+
+// Add ndsi2  --归一化土壤指数2(NDSI2)
+var ndsi2 = image.normalizedDifference(['B12','B3']).rename("NDSI2").toDouble();
+
+// Add dvi --差值植被指数DVI(B8-B4)
+var dvi = nir.subtract(red).rename("DVI").toDouble()
+
+return image.addBands(evi).addBands(reci).addBands(ndre1).addBands(msavi).addBands(soilBrightness)
+              .addBands(awei).addBands(savi).addBands(rgvi).addBands(ndvi).addBands(rendvi)
+              .addBands(gdvi).addBands(eevi).addBands(bi).addBands(si)
+              .addBands(ipvi)
+              .addBands(bsi).addBands(bsi1).addBands(bsi3).addBands(bni).addBands(dbsi)
+              .addBands(tf).addBands(ndsi1).addBands(ndsi2).addBands(dvi)
+              // .addBands(ndwi).addBands(lswi).addBands(mndwi).addBands(salinity)
+              // .addBands(blue).addBands(green).addBands(red).addBands(nir)
+              // .addBands(redEdge1).addBands(redEdge2).addBands(redEdge3).addBands(redEdge4)
+              // .addBands(swir1).addBands(swir2);
+}
+
+// 缨帽变化中湿度的绿色差异
+var addTCWGD = function(image){
+  var TCW = image.expression(
+    '(0.2578*BLUE)+(0.2305*GREEN)+(0.0883*RED)+(0.1071*NIR)+(-0.7611*SWIR1)+(-0.5308*SWIR2)',{
+      'BLUE': image.select('B2'),
+      'GREEN': image.select('B3'),
+      'RED': image.select('B4'),
+      'NIR': image.select('B8'),
+      'SWIR1': image.select('B11'),
+      'SWIR2': image.select('B12')
+    })
+
+  var TCG = image.expression(
+      '(-0.3599*BLUE)+(-0.3533*GREEN)+(-0.4734*RED)+(0.6633*NIR)+(0.0087*SWIR1)+(-0.2856*SWIR2)',{
+        'BLUE': image.select('B2'),
+        'GREEN': image.select('B3'),
+        'RED': image.select('B4'),
+        'NIR': image.select('B8'),
+        'SWIR1': image.select('B11'),
+        'SWIR2': image.select('B12')
+      })
+  var TCWGD = TCW.subtract(TCG).rename('TCWGD');
+  return image.addBands(TCWGD);
+};
+
+function addIndex_other(image){ 
+ // 添加新的指数
+    var bandCombinations = [
+        ['B2', 'B3'],   // Blue-Green
+        ['B2', 'B4'],   // Blue-Red      盐度指数A(blue/red)
+        ['B2', 'B5'],   // Blue-RedEdge1
+        ['B2', 'B6'],   // Blue-RedEdge2
+        ['B2', 'B7'],   // Blue-RedEdge3
+        ['B2', 'B8'],   // Blue-NIR
+        ['B2', 'B8A'],  // Blue-RedEdge4
+        ['B2', 'B11'],  // Blue-SWIR1
+        ['B2', 'B12'],  // Blue-SWIR2    
+        ['B3', 'B4'],   // Green-Red       红绿植被归一化指数RGVI(Red-Green)*;salinity(green/red)
+        ['B3', 'B5'],   // Green-RedEdge1
+        ['B3', 'B6'],   // Green-RedEdge2
+        ['B3', 'B7'],   // Green-RedEdge3
+        ['B3', 'B8'],   // Green-NIR          --ndwi归一化指数(B3-B8)
+        ['B3', 'B8A'],  // Green-RedEdge4
+        ['B3', 'B11'],  // Green-SWIR1        mNDWI归一化指数(B3-B11)
+        ['B3', 'B12'],  // Green-SWIR2        归一化土壤指数2-NDSI2(SWIR2−G)*
+        ['B4', 'B5'],   // Red-RedEdge1     盐度指数归一化指数SI(B4-B5)
+        ['B4', 'B6'],   // Red-RedEdge2
+        ['B4', 'B7'],   // Red-RedEdge3
+        ['B4', 'B8'],   // Red-NIR            --NDVI归一化指数(B8-B4)*;比值植被指数RVI(B8/B4);差值植被指数DVI(B8-B4)*
+        ['B4', 'B8A'],  // Red-RedEdge4
+        ['B4', 'B11'],  // Red-SWIR1
+        ['B4', 'B12'],  // Red-SWIR2
+        ['B5', 'B6'],   // RedEdge1-RedEdge2    红边归一化植被指数RENDVI(redEdge2- redEdge1)
+        ['B5', 'B7'],   // RedEdge1-RedEdge3
+        ['B5', 'B8'],   // RedEdge1-NIR
+        ['B5', 'B8A'],  // RedEdge1-RedEdge4
+        ['B5', 'B11'],  // RedEdge1-SWIR1
+        ['B5', 'B12'],  // RedEdge1-SWIR2
+        ['B6', 'B7'],   // RedEdge2-RedEdge3
+        ['B6', 'B8'],   // RedEdge2-NIR
+        ['B6', 'B8A'],  // RedEdge2-RedEdge4
+        ['B6', 'B11'],  // RedEdge2-SWIR1
+        ['B6', 'B12'],  // RedEdge2-SWIR2
+        ['B7', 'B8'],   // RedEdge3-NIR
+        ['B7', 'B8A'],  // RedEdge3-RedEdge4
+        ['B7', 'B11'],  // RedEdge3-SWIR1
+        ['B7', 'B12'],  // RedEdge3-SWIR2
+        ['B8', 'B8A'],  // NIR-RedEdge4
+        ['B8', 'B11'],  // NIR-SWIR1          LSWI归一化指数(B8-B11) ; 归一化土壤指数NDSI1(swir1-nir)
+        ['B8', 'B12'],  // NIR-SWIR2
+        ['B8A', 'B11'], // RedEdge4-SWIR1
+        ['B8A', 'B12'], // RedEdge4-SWIR2
+        ['B11', 'B12']  // SWIR1-SWIR2
+    ];
+
+
+    bandCombinations.forEach(function(bands){
+        var band1= bands[0];
+        var band2 = bands[1];
+        
+        var indexName1 = bands.join('_')//.replace('B', ''); // Generate index name
+        var index1 = image.normalizedDifference(bands).rename(indexName1).toDouble();
+        
+        // var indexName2 = band2 + '_' + band1;
+        // var index2 = image.normalizedDifference([band2,band1]).rename(indexName2).toDouble();
+        
+        var indexName3 = bands.join('/'); // Generate index name
+        var numerator = image.select(bands[0]);
+        var denominator = image.select(bands[1]);
+        var index3 = numerator.divide(denominator).rename(indexName3).toDouble();
+        
+        var indexName4 = band2 + '/' + band1; // Generate index name
+        var index4 = denominator.divide(numerator).rename(indexName4).toDouble();
+        
+        var indexName5 = band2 + '-' + band1; // Generate index name
+        var index5 = denominator.subtract(numerator).rename(indexName5).toDouble();
+        
+        // var indexName6 = band1 + '-' + band2; // Generate index name
+        // var index6 = numerator.subtract(denominator).rename(indexName6).toDouble();
+        
+        var indexName7 = band1 + '_plus_' + band2; // Generate index name
+        var index7 = numerator.add(denominator).rename(indexName7).toDouble();
+        
+        image = image.addBands(index1).addBands(index3).addBands(index4)
+                     .addBands(index5).addBands(index7);
+                    // .addBands(index6).addBands(index2)
+                     
+    });
+    
+    return image;
+}
+
+// 计算灰度共生矩阵纹理特征
+var maskedCollection32 = maskedCollection.first().select(bands_ori).toInt32()
+var glcmTextureS2 = maskedCollection32.select(bands_ori).glcmTexture({
+  size: 5, // 窗口大小为 5x5
+  average: true // 计算平均值
+});
+
+var glcmS2MergedImage = ee.Image(0);
+// 遍历每个波段，分别提取标准差和对比度
+bands_ori.forEach(function(band) {
+  // 选择当前波段的标准差和对比度
+  var varBand = glcmTextureS2.select(band + '_var');
+  var corrBand = glcmTextureS2.select(band + '_corr');
+  var contrastBand = glcmTextureS2.select(band + '_contrast');
+  
+  // 合并当前波段的标准差和对比度到一个图像
+  var mergedBand = varBand.addBands(corrBand).addBands(contrastBand);
+  glcmS2MergedImage = glcmS2MergedImage.addBands(mergedBand);
+});
+
+// 选择除了"constant"以外的所有波段
+var bandsToKeep = glcmS2MergedImage.bandNames().filter(ee.Filter.neq('item', 'constant'));
+
+// 选择需要保留的波段
+glcmS2MergedImage = glcmS2MergedImage.select(bandsToKeep);
+// 打印结果
+print('GLCM Texture:', glcmS2MergedImage);
+
+// 计算拉普拉斯滤波器
+// 定义Laplacian滤波器
+var laplacianFilter = ee.Kernel.laplacian8();
+
+// 应用Laplacian滤波器
+var laplacianS2 = maskedCollection.first().select(bands_ori).convolve(laplacianFilter);
+
+// 新的波段名称列表，加上"_lap"后缀
+var renamedBands = bands_ori.map(function(band) {
+  return band + '_lap';
+});
+
+// 使用循环重命名每个波段
+laplacianS2 = laplacianS2.select(bands_ori, renamedBands);
+// print(laplacian)
+
+// 在每个影像上计算VI
+var IndexImages = maskedCollection.map(addIndex).map(addTCWGD).map(addIndex_other)
+
+// 获得sentinel-1的波段名称，并合并波段
+var Sentinel1_bandNames = sentinel1Index.bandNames()
+IndexImages = ee.ImageCollection(IndexImages.first().addBands(sentinel1Index.select(Sentinel1_bandNames))
+                                                    .addBands(glcmS2MergedImage)
+                                                    .addBands(laplacianS2))
+                                          
+// 合并 Sentinel-1和 sentinel-2 的波段
+var image = IndexImages.first()//.addBands(sentinel1Index.select(sentinel1Index.bandNames()))
+
+print('image',image)
+
+// 1. 获取DEM数据集
+var dem = ee.Image('USGS/SRTMGL1_003'); //--30m分辨率
+
+// 计算坡度
+var slope = ee.Terrain.slope(dem);
+
+// 2. 创建DEM小于5的遮罩
+var demMask = dem.lte(1.5);
+
+// 创建坡度小于 5 度的遮罩
+var slopeMask = slope.lt(2.2);
+// 组合两个遮罩，取交集
+var combinedMask = demMask.and(slopeMask);
+
+// // 3. 将DEM遮罩应用到Sentinel-2影像上
+// image = ee.ImageCollection(image).map(function(img) {
+//   // 将DEM和坡度的遮罩应用到影像上
+//   var maskedImg = img.updateMask(combinedMask);
+  
+//   // 获取影像中DEM值小于1.5且坡度小于2.2的区域
+//   var area = combinedMask.reduceRegion({
+//     reducer: ee.Reducer.anyNonZero(),
+//     geometry: img.geometry(),
+//     scale: 10,
+//     bestEffort: true
+//   }).values().get(0);
+  
+//   // 如果符合条件的区域存在，则保留影像，否则不保留
+//   return ee.Algorithms.If({
+//     condition: area,
+//     trueCase: maskedImg,
+//     falseCase: ee.Image().byte()
+//   });
+// }).first();
+
+
+// 1. 获取影像的范围
+var imageBounds = image.geometry();
+
+// // 将波段对的组合转换为字符串形式，并进行波段选择
+// var bandCombinationsSelection = bandCombinations.map(function(combination) {
+//     var band1 = combination.join('/') + ": withinBounds.select(\"" + combination.join('/') + "\")";
+//     var band2 = combination.join('_') + ": withinBounds.select(\"" + combination.join('_') + "\")";
+//     return band1,band2
+// });
+
+
+        
+// 2. 定义规则应用函数
+var applyRules = function(image) {
+    var withinBounds = image//.clip(imageBounds); // 限制到图像范围内
+    
+    // 获取影像的波段列表
+    var bandsToMap = ee.List(withinBounds.bandNames());
+
+
+    // // 创建一个函数，用于将波段名称映射到波段图像
+    // function mapBandToImage(bandName) {
+    //     return withinBounds.select([bandName]); // 注意这里将波段名称放入字符串列表中
+    // }
+    // // 创建变量映射
+    // var variableMapping = ee.Dictionary.fromLists(bandsToMap, bandsToMap.map(mapBandToImage));
+    
+  // 创建一个空字典
+    var variableMapping = ee.Dictionary();
+    
+    // 将每个波段添加到字典中
+    bandsToMap.map(function(bandName) {
+        variableMapping = variableMapping.set(bandName, withinBounds.select([bandName]));
+        return null;
+    });
+
+    
+    var classifiedImage = withinBounds.expression(
+ 
+  
+  
+    "(B11-B8 > -1458.500) && (B12/B11 <= 0.881) && (B2/B7 <= 0.975) && (B4 > 668.000) && (B4_contrast <= 5474.203) && (B5-B2 <= 1066.000) && (B5_B6 <= 0.063) && (B6_B11 > -0.126) && (B8A_plus_B12 <= 4380.500) && (EEVI > 0.158) && (VH <= -20.115) ? 1 : " +
+"(B5_B11 <= 0.006) && (B8A-B7 > 103.500) && (B8_var > 4311.905) ? 0 : " +
+"(B2_plus_B11 > 805.000) && (B4-B3 <= -69.250) && (B4_var <= 33768.442) && (B5/B2 <= 1.119) ? 0 : " +
+"(B11_var > 2.950) && (B3_B8 > 0.609) && (B3_var <= 2168.321) && (VH_corr <= 0.391) ? 0 : " +
+"(B2_plus_B11 > 816.500) && (B3_corr <= 0.706) && (B4/B12 > 8.972) && (B4_plus_B11 > 1353.000) && (B6/B4 <= 0.917) ? 0 : " +
+"(B4_corr <= 0.843) && (B5/B2 <= 1.655) && (B7_contrast > 3148.816) && (elevation > 0.500) ? 0 : " +
+"(B2_contrast <= 1247.080) && (B2_plus_B3 <= 1343.500) && (B3/B11 <= 13.245) && (B3/B4 <= 1.383) && (B8-B4 <= -189.000) && (B8A/B12 > 2.054) && (B8A/B3 > 0.181) && (SAR_Sum > -40.886) ? 1 : " +
+"(B11-B4 > -1264.000) && (B12/B11 <= 0.703) && (B2_contrast <= 11249.855) && (B4/B12 > 0.932) && (B4/B3 > 0.927) && (B5-B3 <= 610.250) && (B5_B6 <= 0.063) && (B6/B7 > 0.922) && (B7-B4 > -43.500) && (B8A/B7 > 0.868) && (VH <= -21.334) ? 1 : " +
+"(B2_plus_B11 > 805.000) && (B4_B6 > 0.166) && (B4_var <= 33768.442) ? 0 : " +
+"(B11_var <= 3620.365) && (B3_plus_B7 > 2164.500) && (B4/B5 <= 0.911) && (B7/B12 > 2.032) && (TCWGD <= 1357.588) && (VH <= -24.771) ? 1 : " +
+"(B11-B3 <= 966.500) && (B11-B8 > -1350.000) && (B12/B11 <= 0.826) && (B4 > 668.000) && (B4_B6 <= 0.040) && (B4_contrast <= 3582.052) && (B4_var <= 9292.017) && (B6/B11 <= 15.838) && (B6_B11 > -0.126) && (B8A-B6 <= 174.500) && (MSAVI <= 0.246) && (RECI > -0.081) && (elevation <= 0.500) ? 1 : " +
+"(B11-B8 > -1458.500) && (B11_B12 > 0.092) && (B2/B7 <= 0.975) && (B2_plus_B3 > 2019.000) && (B3_contrast <= 12834.056) && (B4/B8A > 0.836) && (B5/B3 <= 1.514) && (B5_B6 <= 0.063) && (B8/B7 > 0.918) && (B8A/B6 <= 1.135) && (B8A_plus_B12 <= 4380.500) ? 1 : " +
+"(B2/B11 > 7.153) && (B3/B4 <= 0.840) && (B5/B4 <= 1.110) && (B6-B5 <= -42.500) && (B8A_var <= 822.594) ? 0 : " +
+"(B2_var <= 208775.602) && (B4-B2 <= 40.500) && (B4_plus_B5 <= 1892.500) && (B7_contrast > 1149.276) ? 0 : " +
+"(B3/B4 > 1.498) && (B4_corr <= 0.521) && (B5-B4 > -82.500) ? 0 : " +
+"(B11_var > 3041.460) && (B3_corr <= 0.815) && (B4_B11 <= -0.066) && (B8A-B3 > 789.000) && (TCWGD <= -809.180) && (VH > -26.342) ? 0 : " +
+"(B12-B3 > -255.000) && (B2_lap <= 812.000) && (B4_B7 <= -0.054) && (B6/B7 <= 0.922) ? 0 : " +
+"(B3_plus_B12 > 838.500) && (B4-B3 <= -61.500) && (B8-B2 <= 37.000) && (B8_lap <= 1664.500) && (VV_var <= 1.528) ? 0 : " +
+"(B11_var > 55633.154) && (B3/B2 <= 1.602) && (B3_var <= 68519.613) && (B6 > 2014.500) && (B7-B4 > -43.500) && (TCWGD > -809.180) && (VH <= -20.115) ? 1 : " +
+"(B11_contrast > 1.407) && (B2_plus_B11> 520.500) && (RGVI <= -0.217) ? 0 : " +
+"(B11-B3 <= 966.500) && (B2/B8 <= 0.917) && (B2_plus_B3 > 1831.000) && (B2_var > 443.422) && (B3_contrast <= 12834.056) && (B4/B2 <= 1.797) && (B6/B7 > 0.965) && (B7_B8A <= 0.068) && (B7_var > 172.085) && (B8A-B3 <= 823.500) && (B8_B12 > 0.050) && (VV_contrast <= 1.167) ? 1 : " +
+"(B2/B7 <= 0.975) && (B2_plus_B11 > 1671.000) && (B3_contrast <= 20203.630) && (B7/B2 <= 1.506) && (B8-B2 > 37.000) && (B8/B6 > 0.933) && (B8A/B6 <= 1.135) && (VH <= -20.122) ? 1 : " +
+"(B2_plus_B5 <= 1697.000) && (B2_var <= 208775.602) && (B3_plus_B8A > 1089.500) && (B4-B3 <= -69.250) && (B5-B3 <= 562.500) && (B7_contrast > 1149.276) ? 0 : " +
+"(B11/B8A <= 0.500) && (B4-B3 > -262.500) && (B5_B8A > 0.321) && (B8/B7 > 0.918) && (B8A-B7 > -40.500) && (BSI1 > -0.193) && (RENDVI <= -0.264) ? 1 : " +
+"(B11_B12 > 0.099) && (B4 > 629.000) && (B4-B3 > -80.500) && (B4/B2 > 1.027) && (B4/B7 <= 1.042) && (B4_contrast <= 5474.203) && (B5-B2 <= 1066.000) && (B6_B8 > -0.020) && (B6_contrast > 89.080) && (B7/B6 <= 1.088) ? 1 : " +
+"(B4_B12 <= -0.090) && (B5_lap <= 232.500) && (B8A_var > 5576.432) ? 0 : " +
+"(B11-B8 > -1350.000) && (B12/B11 <= 0.826) && (B2_B6 > -0.486) && (B4/B12 > 1.411) && (B7/B6 <= 1.088) && (B8A/B5 > 0.974) && (RGVI > -0.039) && (VH <= -24.323) ? 1 : " +
+"(B11/B4 > 0.065) && (B12-B6 <= -109.500) && (B2_B4 <= -0.083) && (B2_contrast <= 1247.080) && (B3_plus_B12 <= 921.500) && (B5/B3 <= 1.449) && (B5_B12 > 0.712) && (B8A/B3 > 0.181) && (VV_var > 1.528) ? 1 : " +
+"(B11-B8 > -1350.000) && (B12/B11 <= 0.826) && (B3_var <= 4247.892) && (B4 > 668.000) && (B4_B6 <= 0.040) && (B4_contrast <= 3582.052) && (B6/B11 <= 15.838) && (B6_B11 > -0.126) && (B7-B2 <= 1276.500) && (B8A-B6 <= 174.500) && (B8A_plus_B12 <= 4380.500) && (RECI > -0.081) && (elevation <= 0.500) ? 1 : " +
+"(B4/B12 <= 0.932) && (B4_lap <= 627.000) && (B7_contrast > 1149.276) && (B8/B8A <= 1.052) ? 0 : " +
+    "0",
+       
+        // 变量映射
+        {
+            "B2": withinBounds.select("B2"),
+            "B3": withinBounds.select("B3"),
+            "B4": withinBounds.select("B4"),
+            "B5": withinBounds.select("B5"),
+            "B6": withinBounds.select("B6"),
+            "B7": withinBounds.select("B7"),
+            "B8": withinBounds.select("B8"),
+            "B8A": withinBounds.select("B8A"),
+            "B11": withinBounds.select("B11"),
+            "B12": withinBounds.select("B12"),
+            
+            "EVI": withinBounds.select("EVI"), "NDVI": withinBounds.select("NDVI"), "NDWI": withinBounds.select("NDWI"), "RGVI": withinBounds.select("RGVI"), "RENDVI": withinBounds.select("RENDVI"), "RECI": withinBounds.select("RECI"), "NDRE1": withinBounds.select("NDRE1"),
+            "TCWGD" : withinBounds.select("TCWGD"), "SoilBrightness": withinBounds.select("SoilBrightness"), "mNDWI": withinBounds.select("mNDWI"), "MSAVI": withinBounds.select("MSAVI"), "LSWI": withinBounds.select("LSWI"),"AWEI": withinBounds.select("AWEI"),
+            "elevation": withinBounds.select("elevation"), "slope": withinBounds.select("slope"),
+            "TF": withinBounds.select("TF"), "SAVI": withinBounds.select("SAVI"),
+            "GDVI": withinBounds.select("GDVI"), "EEVI": withinBounds.select("EEVI"),
+            "BI": withinBounds.select("BI"), "SI": withinBounds.select("SI"),
+            "BNI": withinBounds.select("BNI"), "BSI": withinBounds.select("BSI"),
+            "BSI1": withinBounds.select("BSI1"), "BSI3": withinBounds.select("BSI3"),
+            "DBSI": withinBounds.select("DBSI"), "NDSI1": withinBounds.select("NDSI1"),
+            "NDSI2": withinBounds.select("NDSI2"), "DVI": withinBounds.select("DVI"),
+            "IPVI": withinBounds.select("IPVI"),
+            
+            // 添加波段对的组合
+            "B2/B3": withinBounds.select("B2/B3"), "B2/B4": withinBounds.select("B2/B4"), "B2/B5": withinBounds.select("B2/B5"), "B2/B6": withinBounds.select("B2/B6"), "B2/B7": withinBounds.select("B2/B7"), "B2/B8": withinBounds.select("B2/B8"), "B2/B8A": withinBounds.select("B2/B8A"), "B2/B11": withinBounds.select("B2/B11"), "B2/B12": withinBounds.select("B2/B12"),
+            "B3/B4": withinBounds.select("B3/B4"), "B3/B5": withinBounds.select("B3/B5"), "B3/B6": withinBounds.select("B3/B6"), "B3/B7": withinBounds.select("B3/B7"), "B3/B8": withinBounds.select("B3/B8"), "B3/B8A": withinBounds.select("B3/B8A"), "B3/B11": withinBounds.select("B3/B11"), "B3/B12": withinBounds.select("B3/B12"),
+            "B4/B5": withinBounds.select("B4/B5"), "B4/B6": withinBounds.select("B4/B6"), "B4/B7": withinBounds.select("B4/B7"), "B4/B8": withinBounds.select("B4/B8"), "B4/B8A": withinBounds.select("B4/B8A"), "B4/B11": withinBounds.select("B4/B11"), "B4/B12": withinBounds.select("B4/B12"), 
+            "B5/B6": withinBounds.select("B5/B6"), "B5/B7": withinBounds.select("B5/B7"), "B5/B8": withinBounds.select("B5/B8"), "B5/B8A": withinBounds.select("B5/B8A"), "B5/B11": withinBounds.select("B5/B11"), "B5/B12": withinBounds.select("B5/B12"), 
+            "B6/B7": withinBounds.select("B6/B7"), "B6/B8": withinBounds.select("B6/B8"), "B6/B8A": withinBounds.select("B6/B8A"), "B6/B11": withinBounds.select("B6/B11"), "B6/B12": withinBounds.select("B6/B12"), 
+            "B7/B8": withinBounds.select("B7/B8"), "B7/B8A": withinBounds.select("B7/B8A"), "B7/B11": withinBounds.select("B7/B11"), "B7/B12": withinBounds.select("B7/B12"),
+            "B8/B8A": withinBounds.select("B8/B8A"), "B8/B11": withinBounds.select("B8/B11"), "B8/B12": withinBounds.select("B8/B12"), 
+            "B8A/B11": withinBounds.select("B8A/B11"), "B8A/B12": withinBounds.select("B8A/B12"),
+            "B11/B12": withinBounds.select("B11/B12"),
+
+            "B3/B2": withinBounds.select("B3/B2"), "B4/B2": withinBounds.select("B4/B2"), "B5/B2": withinBounds.select("B5/B2"), "B6/B2": withinBounds.select("B6/B2"), "B7/B2": withinBounds.select("B7/B2"), "B8/B2": withinBounds.select("B8/B2"), "B8A/B2": withinBounds.select("B8A/B2"), "B11/B2": withinBounds.select("B11/B2"), "B12/B2": withinBounds.select("B12/B2"),
+            "B4/B3": withinBounds.select("B4/B3"), "B5/B3": withinBounds.select("B5/B3"), "B6/B3": withinBounds.select("B6/B3"), "B7/B3": withinBounds.select("B7/B3"), "B8/B3": withinBounds.select("B8/B3"), "B8A/B3": withinBounds.select("B8A/B3"), "B11/B3": withinBounds.select("B11/B3"), "B12/B3": withinBounds.select("B12/B3"),
+            "B5/B4": withinBounds.select("B5/B4"), "B6/B4": withinBounds.select("B6/B4"), "B7/B4": withinBounds.select("B7/B4"), "B8/B4": withinBounds.select("B8/B4"), "B8A/B4": withinBounds.select("B8A/B4"), "B11/B4": withinBounds.select("B11/B4"), "B12/B4": withinBounds.select("B12/B4"),
+            "B6/B5": withinBounds.select("B6/B5"), "B7/B5": withinBounds.select("B7/B5"), "B8/B5": withinBounds.select("B8/B5"), "B8A/B5": withinBounds.select("B8A/B5"), "B11/B5": withinBounds.select("B11/B5"), "B12/B5": withinBounds.select("B12/B5"),
+            "B7/B6": withinBounds.select("B7/B6"), "B8/B6": withinBounds.select("B8/B6"), "B8A/B6": withinBounds.select("B8A/B6"), "B11/B6": withinBounds.select("B11/B6"), "B12/B6": withinBounds.select("B12/B6"),
+            "B8/B7": withinBounds.select("B8/B7"), "B8A/B7": withinBounds.select("B8A/B7"), "B11/B7": withinBounds.select("B11/B7"), "B12/B7": withinBounds.select("B12/B7"),
+            "B8A/B8": withinBounds.select("B8A/B8"), "B11/B8": withinBounds.select("B11/B8"), "B12/B8": withinBounds.select("B12/B8"),
+            "B11/B8A": withinBounds.select("B11/B8A"), "B12/B8A": withinBounds.select("B12/B8A"),
+            "B12/B11": withinBounds.select("B12/B11"),
+
+
+            "B2_B3": withinBounds.select("B2_B3"), "B2_B4": withinBounds.select("B2_B4"), "B2_B5": withinBounds.select("B2_B5"), "B2_B6": withinBounds.select("B2_B6"), "B2_B7": withinBounds.select("B2_B7"), "B2_B8": withinBounds.select("B2_B8"), "B2_B8A": withinBounds.select("B2_B8A"), "B2_B11": withinBounds.select("B2_B11"), "B2_B12": withinBounds.select("B2_B12"),
+            "B3_B4": withinBounds.select("B3_B4"), "B3_B5": withinBounds.select("B3_B5"), "B3_B6": withinBounds.select("B3_B6"), "B3_B7": withinBounds.select("B3_B7"), "B3_B8": withinBounds.select("B3_B8"), "B3_B8A": withinBounds.select("B3_B8A"), "B3_B11": withinBounds.select("B3_B11"), "B3_B12": withinBounds.select("B3_B12"),
+            "B4_B5": withinBounds.select("B4_B5"), "B4_B6": withinBounds.select("B4_B6"), "B4_B7": withinBounds.select("B4_B7"), "B4_B8": withinBounds.select("B4_B8"), "B4_B8A": withinBounds.select("B4_B8A"), "B4_B11": withinBounds.select("B4_B11"), "B4_B12": withinBounds.select("B4_B12"), 
+            "B5_B6": withinBounds.select("B5_B6"), "B5_B7": withinBounds.select("B5_B7"), "B5_B8": withinBounds.select("B5_B8"), "B5_B8A": withinBounds.select("B5_B8A"), "B5_B11": withinBounds.select("B5_B11"), "B5_B12": withinBounds.select("B5_B12"), 
+            "B6_B7": withinBounds.select("B6_B7"), "B6_B8": withinBounds.select("B6_B8"), "B6_B8A": withinBounds.select("B6_B8A"), "B6_B11": withinBounds.select("B6_B11"), "B6_B12": withinBounds.select("B6_B12"), 
+            "B7_B8": withinBounds.select("B7_B8"), "B7_B8A": withinBounds.select("B7_B8A"), "B7_B11": withinBounds.select("B7_B11"), "B7_B12": withinBounds.select("B7_B12"),
+            "B8_B8A": withinBounds.select("B8_B8A"), "B8_B11": withinBounds.select("B8_B11"), "B8_B12": withinBounds.select("B8_B12"), 
+            "B8A_B11": withinBounds.select("B8A_B11"), "B8A_B12": withinBounds.select("B8A_B12"),
+            "B11_B12": withinBounds.select("B11_B12"),
+            
+            "B2_plus_B3": withinBounds.select("B2_plus_B3"), "B2_plus_B4": withinBounds.select("B2_plus_B4"), "B2_plus_B5": withinBounds.select("B2_plus_B5"), "B2_plus_B6": withinBounds.select("B2_plus_B6"), "B2_plus_B7": withinBounds.select("B2_plus_B7"), "B2_plus_B8": withinBounds.select("B2_plus_B8"), "B2_plus_B8A": withinBounds.select("B2_plus_B8A"), "B2_plus_B11": withinBounds.select("B2_plus_B11"), "B2_plus_B12": withinBounds.select("B2_plus_B12"), 
+            "B3_plus_B4": withinBounds.select("B3_plus_B4"), "B3_plus_B5": withinBounds.select("B3_plus_B5"), "B3_plus_B6": withinBounds.select("B3_plus_B6"), "B3_plus_B7": withinBounds.select("B3_plus_B7"), "B3_plus_B8": withinBounds.select("B3_plus_B8"), "B3_plus_B8A": withinBounds.select("B3_plus_B8A"), "B3_plus_B11": withinBounds.select("B3_plus_B11"), "B3_plus_B12": withinBounds.select("B3_plus_B12"), 
+            "B4_plus_B5": withinBounds.select("B4_plus_B5"), "B4_plus_B6": withinBounds.select("B4_plus_B6"), "B4_plus_B7": withinBounds.select("B4_plus_B7"), "B4_plus_B8": withinBounds.select("B4_plus_B8"), "B4_plus_B8A": withinBounds.select("B4_plus_B8A"), "B4_plus_B11": withinBounds.select("B4_plus_B11"), "B4_plus_B12": withinBounds.select("B4_plus_B12"), 
+            "B5_plus_B6": withinBounds.select("B5_plus_B6"), "B5_plus_B7": withinBounds.select("B5_plus_B7"), "B5_plus_B8": withinBounds.select("B5_plus_B8"), "B5_plus_B8A": withinBounds.select("B5_plus_B8A"), "B5_plus_B11": withinBounds.select("B5_plus_B11"), "B5_plus_B12": withinBounds.select("B5_plus_B12"), 
+            "B6_plus_B7": withinBounds.select("B6_plus_B7"), "B6_plus_B8": withinBounds.select("B6_plus_B8"), "B6_plus_B8A": withinBounds.select("B6_plus_B8A"), "B6_plus_B11": withinBounds.select("B6_plus_B11"), "B6_plus_B12": withinBounds.select("B6_plus_B12"), 
+            "B7_plus_B8": withinBounds.select("B7_plus_B8"), "B7_plus_B8A": withinBounds.select("B7_plus_B8A"), "B7_plus_B11": withinBounds.select("B7_plus_B11"), "B7_plus_B12": withinBounds.select("B7_plus_B12"), 
+            "B8_plus_B8A": withinBounds.select("B8_plus_B8A"), "B8_plus_B11": withinBounds.select("B8_plus_B11"), "B8_plus_B12": withinBounds.select("B8_plus_B12"), 
+            "B8A_plus_B11": withinBounds.select("B8A_plus_B11"), "B8A_plus_B12": withinBounds.select("B8A_plus_B12"), 
+            "B11_plus_B12": withinBounds.select("B11_plus_B12"),
+
+            "B2_var": withinBounds.select("B2_var"), "B2_contrast": withinBounds.select("B2_contrast"), "B2_corr": withinBounds.select("B2_corr"),
+            "B3_var": withinBounds.select("B3_var"), "B3_contrast": withinBounds.select("B3_contrast"), "B3_corr": withinBounds.select("B3_corr"),
+            "B4_var": withinBounds.select("B4_var"), "B4_contrast": withinBounds.select("B4_contrast"), "B4_corr": withinBounds.select("B4_corr"),
+            "B5_var": withinBounds.select("B5_var"), "B5_contrast": withinBounds.select("B5_contrast"), "B5_corr": withinBounds.select("B5_corr"),
+            "B6_var": withinBounds.select("B6_var"), "B6_contrast": withinBounds.select("B6_contrast"), "B6_corr": withinBounds.select("B6_corr"),
+            "B7_var": withinBounds.select("B7_var"), "B7_contrast": withinBounds.select("B7_contrast"), "B7_corr": withinBounds.select("B7_corr"),
+            "B8_var": withinBounds.select("B8_var"), "B8_contrast": withinBounds.select("B8_contrast"), "B8_corr": withinBounds.select("B8_corr"),
+            "B8A_var": withinBounds.select("B8A_var"), "B8A_contrast": withinBounds.select("B8A_contrast"), "B8A_corr": withinBounds.select("B8A_corr"),
+            "B11_var": withinBounds.select("B11_var"), "B11_contrast": withinBounds.select("B11_contrast"), "B11_corr": withinBounds.select("B11_corr"),
+            "B12_var": withinBounds.select("B12_var"), "B12_contrast": withinBounds.select("B12_contrast"), "B12_corr": withinBounds.select("B12_corr"),
+
+            "B2_lap": withinBounds.select("B2_lap"),
+            "B3_lap": withinBounds.select("B3_lap"),
+            "B4_lap": withinBounds.select("B4_lap"),
+            "B5_lap": withinBounds.select("B5_lap"),
+            "B6_lap": withinBounds.select("B6_lap"),
+            "B7_lap": withinBounds.select("B7_lap"),
+            "B8_lap": withinBounds.select("B8_lap"),
+            "B8A_lap": withinBounds.select("B8A_lap"),
+            "B11_lap": withinBounds.select("B11_lap"),
+            "B12_lap": withinBounds.select("B12_lap"),
+
+ 
+            "VV": withinBounds.select("VV"),"VH": withinBounds.select("VH"),
+            "SAR_NDVI": withinBounds.select("SAR_NDVI"),
+            "SAR_Sum": withinBounds.select("SAR_Sum"),
+            "SAR_Diff": withinBounds.select("SAR_Diff"),
+            "VV_VH": withinBounds.select("VV_VH"),
+            "VV/VH": withinBounds.select("VV/VH"),
+            "VH/VV": withinBounds.select("VH/VV"),
+            "VV_var": withinBounds.select("VV_var"),
+            "VV_contrast": withinBounds.select("VV_contrast"),
+            "VV_corr": withinBounds.select("VV_corr"),
+            "VH_var": withinBounds.select("VH_var"),
+            "VH_contrast": withinBounds.select("VH_contrast"),
+            "VH_corr": withinBounds.select("VH_corr"),
+            "VH_lap": withinBounds.select("VH_lap"),
+            "VV_lap": withinBounds.select("VV_lap"),
+            
+            
+        }).rename("class");
+
+        
+        // for (var key in variableMapping) {
+        // classifiedImage[key] = variableMapping[key];
+    // }
+    
+    return classifiedImage;
+};
+
+// 3. 应用规则到整个图像集
+var classifiedImage = applyRules(image);
+
+print('classifiedImage',classifiedImage)
+
+var mask = image.select('B5')//.mask();
+// var invertedMask = mask.not();
+
+// 5. 将图像范围之外的区域遮罩掉
+var maskedClassifiedImage =classifiedImage.updateMask(mask);
+maskedClassifiedImage = maskedClassifiedImage.updateMask(maskedClassifiedImage.eq(1))
+
+
+
+// 3. 为不同的类别设置颜色
+var palette = ['FFFFFF', '0000FF', '00FF00', 'FF0000']; // 分别对应分类为0, 1, 2, 3 的颜色
+
+// Map.addLayer(image,{"bands":["B4","B3","B2"],"max":3000,"gamma":1},'RGB')
+Map.addLayer(compositeImage.first(),{"bands":["B8","B4","B3"],"max":3000,"gamma":1},'Color infrared band')
+// Map.addLayer(image,{"bands":["B12","B8","B4"],"max":3000,"gamma":1},'shortwave infrared band')
+
+// 创建灰色图像
+var grayImage1 = ee.Image.constant(0.5)
+
+var grayVizParams = {
+  min: 0,
+  max: 1,
+  palette: ['#e1e1e1']
+};
+
+Map.addLayer(grayImage1, grayVizParams, 'Gray Areas',0);
+
+// // 4. 将分类后的图像添加到地图上作为图层，并设置颜色
+// Map.addLayer(classifiedImage,
+//             {palette: palette},
+//             "Classified Image");
+             
+             // 6. 将分类后的图像添加到地图上作为图层，并设置颜色
+var palette_t = ['#FCFC00']
+Map.addLayer(maskedClassifiedImage,
+             {palette: palette_t},
+             "Classified Image");
+             
+             
+var IndexImagesMasked =  image.updateMask(maskedClassifiedImage.eq(1))
+print('IndexImagesMasked',IndexImagesMasked)
+// Map.addLayer(IndexImagesMasked,{"bands":["B12","B8","B4"],"max":3000,"gamma":1},'IndexImagesMasked')
+
+
+// var bands = image.bandNames().toArray();
+
+// 获取影像的波段列表
+var bandsToMap = ee.List(image.bandNames());
+
+
+    // 创建一个函数，用于将波段名称映射到波段图像
+function mapBandToImage(bandName) {
+    return image.select([bandName]); // 注意这里将波段名称放入字符串列表中
+}
+
+// 创建变量映射
+var variableMapping = ee.Dictionary.fromLists(bandsToMap, bandsToMap.map(mapBandToImage));
+
+print(variableMapping)
+
+    
+// 2. 定义规则应用函数
+var applyRules_siltSand = function(image) {
+    var withinBounds = image.clip(imageBounds); // 限制到图像范围内
+    
+    // // 获取影像的波段列表
+    // var bandsToMap = ee.List(withinBounds.bandNames());
+
+
+    // // 创建一个函数，用于将波段名称映射到波段图像
+    // function mapBandToImage(bandName) {
+    //     return withinBounds.select([bandName]); // 注意这里将波段名称放入字符串列表中
+    // }
+    // // 创建变量映射
+    // var variableMapping = ee.Dictionary.fromLists(bandsToMap, bandsToMap.map(mapBandToImage));
+    
+    var classifiedImage = withinBounds.expression(
+      "(B12-B11 > -455.500) && (B7_contrast <= 538.110) ? 1 : " +
+"(B12-B11 <= -455.500) && (B3-B2 > 378.000) && (B5_contrast > 1336.747) && (VV <= -10.738) ? 0 : " +
+"(B2/B7 <= 0.598) && (B2_plus_B5 <= 3126.250) && (B5_contrast <= 1027.023) ? 1 : " +
+"(B12-B11 <= -454.500) && (B3_B7 > -0.127) && (B8-B5 <= 161.000) ? 0 : " +
+"(B12-B11 > -456.000) && (B12/B11 > 0.595) && (B12_contrast <= 42112.080) && (B2_B5 <= -0.163) && (B8A_plus_B11 <= 2778.500) ? 1 : " +
+"(B12_contrast <= 42112.080) && (B2_B5 <= -0.163) && (B2_plus_B6 <= 2967.500) && (B6_B8 <= -0.054) ? 1 : " +
+"(B2_plus_B8A > 1689.500) && (B3_B7 > -0.127) && (B5/B6 > 1.068) && (B5/B7 > 1.041) ? 1 : " +
+"(B2_B5 > -0.163) && (B5_contrast <= 1027.023) && (B8_contrast > 6643.293) && (NDVI <= 0.101) ? 0 : " +
+"(B5-B3 <= 165.000) && (B5/B8A <= 1.058) && (B5_contrast > 757.519) && (B8-B5 <= 161.000) ? 0 : " +
+"(B11_contrast <= 3900.796) && (B3_B7 <= -0.127) ? 1 : " +
+"(B3-B2 <= 411.500) && (B4_lap <= 561.000) && (B6_plus_B7 <= 4045.250) && (B8/B3 > 1.337) && (B8A/B7 > 0.989) && (VV_VH <= -0.320) ? 1 : " +
+"(B5_contrast > 1027.023) && (B8A/B6 <= 0.984) && (VH/VV > 1.751) ? 1 : " +
+"(B12-B11 <= -345.250) && (B3 > 1492.000) && (B3/B8 <= 0.980) && (B8A_B12 > 0.004) && (VH/VV <= 2.343) ? 0 : " +
+"(B12/B11 > 0.595) && (B8_contrast <= 6643.293) && (BSI3 <= 103.024) ? 1 : " +
+"(B3_B7 <= -0.127) && (B3_plus_B8A <= 3343.000) && (B8A/B7 > 0.997) ? 1 : " +
+"(B12-B11 <= -345.250) && (B3 > 1492.000) && (B3/B2 > 1.312) && (B6-B5 <= 36.500) && (B8/B7 <= 1.153) ? 0 : " +
+"(B12-B11 > -456.000) && (B4_contrast <= 833.498) ? 1 : " +
+"0", // Default to 1 if no condition matches
+      
+       // 变量映射
+        {
+            "B2": withinBounds.select("B2"),
+            "B3": withinBounds.select("B3"),
+            "B4": withinBounds.select("B4"),
+            "B5": withinBounds.select("B5"),
+            "B6": withinBounds.select("B6"),
+            "B7": withinBounds.select("B7"),
+            "B8": withinBounds.select("B8"),
+            "B8A": withinBounds.select("B8A"),
+            "B11": withinBounds.select("B11"),
+            "B12": withinBounds.select("B12"),
+            
+            "EVI": withinBounds.select("EVI"), "NDVI": withinBounds.select("NDVI"), "NDWI": withinBounds.select("NDWI"), "RGVI": withinBounds.select("RGVI"), "RENDVI": withinBounds.select("RENDVI"), "RECI": withinBounds.select("RECI"), "NDRE1": withinBounds.select("NDRE1"),
+            "TCWGD" : withinBounds.select("TCWGD"), "SoilBrightness": withinBounds.select("SoilBrightness"), "mNDWI": withinBounds.select("mNDWI"), "MSAVI": withinBounds.select("MSAVI"), "LSWI": withinBounds.select("LSWI"),"AWEI": withinBounds.select("AWEI"),
+            "elevation": withinBounds.select("elevation"), "slope": withinBounds.select("slope"),
+            "TF": withinBounds.select("TF"), "SAVI": withinBounds.select("SAVI"),
+            "GDVI": withinBounds.select("GDVI"), "EEVI": withinBounds.select("EEVI"),
+            "BI": withinBounds.select("BI"), "SI": withinBounds.select("SI"),
+            "BNI": withinBounds.select("BNI"), "BSI": withinBounds.select("BSI"),
+            "BSI1": withinBounds.select("BSI1"), "BSI3": withinBounds.select("BSI3"),
+            "DBSI": withinBounds.select("DBSI"), "NDSI1": withinBounds.select("NDSI1"),
+            "NDSI2": withinBounds.select("NDSI2"), "DVI": withinBounds.select("DVI"),
+            "IPVI": withinBounds.select("IPVI"),
+
+            
+            // 添加波段对的组合
+            "B2/B3": withinBounds.select("B2/B3"), "B2/B4": withinBounds.select("B2/B4"), "B2/B5": withinBounds.select("B2/B5"), "B2/B6": withinBounds.select("B2/B6"), "B2/B7": withinBounds.select("B2/B7"), "B2/B8": withinBounds.select("B2/B8"), "B2/B8A": withinBounds.select("B2/B8A"), "B2/B11": withinBounds.select("B2/B11"), "B2/B12": withinBounds.select("B2/B12"),
+            "B3/B4": withinBounds.select("B3/B4"), "B3/B5": withinBounds.select("B3/B5"), "B3/B6": withinBounds.select("B3/B6"), "B3/B7": withinBounds.select("B3/B7"), "B3/B8": withinBounds.select("B3/B8"), "B3/B8A": withinBounds.select("B3/B8A"), "B3/B11": withinBounds.select("B3/B11"), "B3/B12": withinBounds.select("B3/B12"),
+            "B4/B5": withinBounds.select("B4/B5"), "B4/B6": withinBounds.select("B4/B6"), "B4/B7": withinBounds.select("B4/B7"), "B4/B8": withinBounds.select("B4/B8"), "B4/B8A": withinBounds.select("B4/B8A"), "B4/B11": withinBounds.select("B4/B11"), "B4/B12": withinBounds.select("B4/B12"), 
+            "B5/B6": withinBounds.select("B5/B6"), "B5/B7": withinBounds.select("B5/B7"), "B5/B8": withinBounds.select("B5/B8"), "B5/B8A": withinBounds.select("B5/B8A"), "B5/B11": withinBounds.select("B5/B11"), "B5/B12": withinBounds.select("B5/B12"), 
+            "B6/B7": withinBounds.select("B6/B7"), "B6/B8": withinBounds.select("B6/B8"), "B6/B8A": withinBounds.select("B6/B8A"), "B6/B11": withinBounds.select("B6/B11"), "B6/B12": withinBounds.select("B6/B12"), 
+            "B7/B8": withinBounds.select("B7/B8"), "B7/B8A": withinBounds.select("B7/B8A"), "B7/B11": withinBounds.select("B7/B11"), "B7/B12": withinBounds.select("B7/B12"),
+            "B8/B8A": withinBounds.select("B8/B8A"), "B8/B11": withinBounds.select("B8/B11"), "B8/B12": withinBounds.select("B8/B12"), 
+            "B8A/B11": withinBounds.select("B8A/B11"), "B8A/B12": withinBounds.select("B8A/B12"),
+            "B11/B12": withinBounds.select("B11/B12"),
+
+            "B3/B2": withinBounds.select("B3/B2"), "B4/B2": withinBounds.select("B4/B2"), "B5/B2": withinBounds.select("B5/B2"), "B6/B2": withinBounds.select("B6/B2"), "B7/B2": withinBounds.select("B7/B2"), "B8/B2": withinBounds.select("B8/B2"), "B8A/B2": withinBounds.select("B8A/B2"), "B11/B2": withinBounds.select("B11/B2"), "B12/B2": withinBounds.select("B12/B2"),
+            "B4/B3": withinBounds.select("B4/B3"), "B5/B3": withinBounds.select("B5/B3"), "B6/B3": withinBounds.select("B6/B3"), "B7/B3": withinBounds.select("B7/B3"), "B8/B3": withinBounds.select("B8/B3"), "B8A/B3": withinBounds.select("B8A/B3"), "B11/B3": withinBounds.select("B11/B3"), "B12/B3": withinBounds.select("B12/B3"),
+            "B5/B4": withinBounds.select("B5/B4"), "B6/B4": withinBounds.select("B6/B4"), "B7/B4": withinBounds.select("B7/B4"), "B8/B4": withinBounds.select("B8/B4"), "B8A/B4": withinBounds.select("B8A/B4"), "B11/B4": withinBounds.select("B11/B4"), "B12/B4": withinBounds.select("B12/B4"),
+            "B6/B5": withinBounds.select("B6/B5"), "B7/B5": withinBounds.select("B7/B5"), "B8/B5": withinBounds.select("B8/B5"), "B8A/B5": withinBounds.select("B8A/B5"), "B11/B5": withinBounds.select("B11/B5"), "B12/B5": withinBounds.select("B12/B5"),
+            "B7/B6": withinBounds.select("B7/B6"), "B8/B6": withinBounds.select("B8/B6"), "B8A/B6": withinBounds.select("B8A/B6"), "B11/B6": withinBounds.select("B11/B6"), "B12/B6": withinBounds.select("B12/B6"),
+            "B8/B7": withinBounds.select("B8/B7"), "B8A/B7": withinBounds.select("B8A/B7"), "B11/B7": withinBounds.select("B11/B7"), "B12/B7": withinBounds.select("B12/B7"),
+            "B8A/B8": withinBounds.select("B8A/B8"), "B11/B8": withinBounds.select("B11/B8"), "B12/B8": withinBounds.select("B12/B8"),
+            "B11/B8A": withinBounds.select("B11/B8A"), "B12/B8A": withinBounds.select("B12/B8A"),
+            "B12/B11": withinBounds.select("B12/B11"),
+
+
+            "B2_B3": withinBounds.select("B2_B3"), "B2_B4": withinBounds.select("B2_B4"), "B2_B5": withinBounds.select("B2_B5"), "B2_B6": withinBounds.select("B2_B6"), "B2_B7": withinBounds.select("B2_B7"), "B2_B8": withinBounds.select("B2_B8"), "B2_B8A": withinBounds.select("B2_B8A"), "B2_B11": withinBounds.select("B2_B11"), "B2_B12": withinBounds.select("B2_B12"),
+            "B3_B4": withinBounds.select("B3_B4"), "B3_B5": withinBounds.select("B3_B5"), "B3_B6": withinBounds.select("B3_B6"), "B3_B7": withinBounds.select("B3_B7"), "B3_B8": withinBounds.select("B3_B8"), "B3_B8A": withinBounds.select("B3_B8A"), "B3_B11": withinBounds.select("B3_B11"), "B3_B12": withinBounds.select("B3_B12"),
+            "B4_B5": withinBounds.select("B4_B5"), "B4_B6": withinBounds.select("B4_B6"), "B4_B7": withinBounds.select("B4_B7"), "B4_B8": withinBounds.select("B4_B8"), "B4_B8A": withinBounds.select("B4_B8A"), "B4_B11": withinBounds.select("B4_B11"), "B4_B12": withinBounds.select("B4_B12"), 
+            "B5_B6": withinBounds.select("B5_B6"), "B5_B7": withinBounds.select("B5_B7"), "B5_B8": withinBounds.select("B5_B8"), "B5_B8A": withinBounds.select("B5_B8A"), "B5_B11": withinBounds.select("B5_B11"), "B5_B12": withinBounds.select("B5_B12"), 
+            "B6_B7": withinBounds.select("B6_B7"), "B6_B8": withinBounds.select("B6_B8"), "B6_B8A": withinBounds.select("B6_B8A"), "B6_B11": withinBounds.select("B6_B11"), "B6_B12": withinBounds.select("B6_B12"), 
+            "B7_B8": withinBounds.select("B7_B8"), "B7_B8A": withinBounds.select("B7_B8A"), "B7_B11": withinBounds.select("B7_B11"), "B7_B12": withinBounds.select("B7_B12"),
+            "B8_B8A": withinBounds.select("B8_B8A"), "B8_B11": withinBounds.select("B8_B11"), "B8_B12": withinBounds.select("B8_B12"), 
+            "B8A_B11": withinBounds.select("B8A_B11"), "B8A_B12": withinBounds.select("B8A_B12"),
+            "B11_B12": withinBounds.select("B11_B12"),
+            
+            "B2_plus_B3": withinBounds.select("B2_plus_B3"), "B2_plus_B4": withinBounds.select("B2_plus_B4"), "B2_plus_B5": withinBounds.select("B2_plus_B5"), "B2_plus_B6": withinBounds.select("B2_plus_B6"), "B2_plus_B7": withinBounds.select("B2_plus_B7"), "B2_plus_B8": withinBounds.select("B2_plus_B8"), "B2_plus_B8A": withinBounds.select("B2_plus_B8A"), "B2_plus_B11": withinBounds.select("B2_plus_B11"), "B2_plus_B12": withinBounds.select("B2_plus_B12"), 
+            "B3_plus_B4": withinBounds.select("B3_plus_B4"), "B3_plus_B5": withinBounds.select("B3_plus_B5"), "B3_plus_B6": withinBounds.select("B3_plus_B6"), "B3_plus_B7": withinBounds.select("B3_plus_B7"), "B3_plus_B8": withinBounds.select("B3_plus_B8"), "B3_plus_B8A": withinBounds.select("B3_plus_B8A"), "B3_plus_B11": withinBounds.select("B3_plus_B11"), "B3_plus_B12": withinBounds.select("B3_plus_B12"), 
+            "B4_plus_B5": withinBounds.select("B4_plus_B5"), "B4_plus_B6": withinBounds.select("B4_plus_B6"), "B4_plus_B7": withinBounds.select("B4_plus_B7"), "B4_plus_B8": withinBounds.select("B4_plus_B8"), "B4_plus_B8A": withinBounds.select("B4_plus_B8A"), "B4_plus_B11": withinBounds.select("B4_plus_B11"), "B4_plus_B12": withinBounds.select("B4_plus_B12"), 
+            "B5_plus_B6": withinBounds.select("B5_plus_B6"), "B5_plus_B7": withinBounds.select("B5_plus_B7"), "B5_plus_B8": withinBounds.select("B5_plus_B8"), "B5_plus_B8A": withinBounds.select("B5_plus_B8A"), "B5_plus_B11": withinBounds.select("B5_plus_B11"), "B5_plus_B12": withinBounds.select("B5_plus_B12"), 
+            "B6_plus_B7": withinBounds.select("B6_plus_B7"), "B6_plus_B8": withinBounds.select("B6_plus_B8"), "B6_plus_B8A": withinBounds.select("B6_plus_B8A"), "B6_plus_B11": withinBounds.select("B6_plus_B11"), "B6_plus_B12": withinBounds.select("B6_plus_B12"), 
+            "B7_plus_B8": withinBounds.select("B7_plus_B8"), "B7_plus_B8A": withinBounds.select("B7_plus_B8A"), "B7_plus_B11": withinBounds.select("B7_plus_B11"), "B7_plus_B12": withinBounds.select("B7_plus_B12"), 
+            "B8_plus_B8A": withinBounds.select("B8_plus_B8A"), "B8_plus_B11": withinBounds.select("B8_plus_B11"), "B8_plus_B12": withinBounds.select("B8_plus_B12"), 
+            "B8A_plus_B11": withinBounds.select("B8A_plus_B11"), "B8A_plus_B12": withinBounds.select("B8A_plus_B12"), 
+            "B11_plus_B12": withinBounds.select("B11_plus_B12"),
+
+            "B2_var": withinBounds.select("B2_var"), "B2_contrast": withinBounds.select("B2_contrast"), "B2_corr": withinBounds.select("B2_corr"),
+            "B3_var": withinBounds.select("B3_var"), "B3_contrast": withinBounds.select("B3_contrast"), "B3_corr": withinBounds.select("B3_corr"),
+            "B4_var": withinBounds.select("B4_var"), "B4_contrast": withinBounds.select("B4_contrast"), "B4_corr": withinBounds.select("B4_corr"),
+            "B5_var": withinBounds.select("B5_var"), "B5_contrast": withinBounds.select("B5_contrast"), "B5_corr": withinBounds.select("B5_corr"),
+            "B6_var": withinBounds.select("B6_var"), "B6_contrast": withinBounds.select("B6_contrast"), "B6_corr": withinBounds.select("B6_corr"),
+            "B7_var": withinBounds.select("B7_var"), "B7_contrast": withinBounds.select("B7_contrast"), "B7_corr": withinBounds.select("B7_corr"),
+            "B8_var": withinBounds.select("B8_var"), "B8_contrast": withinBounds.select("B8_contrast"), "B8_corr": withinBounds.select("B8_corr"),
+            "B8A_var": withinBounds.select("B8A_var"), "B8A_contrast": withinBounds.select("B8A_contrast"), "B8A_corr": withinBounds.select("B8A_corr"),
+            "B11_var": withinBounds.select("B11_var"), "B11_contrast": withinBounds.select("B11_contrast"), "B11_corr": withinBounds.select("B11_corr"),
+            "B12_var": withinBounds.select("B12_var"), "B12_contrast": withinBounds.select("B12_contrast"), "B12_corr": withinBounds.select("B12_corr"),
+
+            "B2_lap": withinBounds.select("B2_lap"),
+            "B3_lap": withinBounds.select("B3_lap"),
+            "B4_lap": withinBounds.select("B4_lap"),
+            "B5_lap": withinBounds.select("B5_lap"),
+            "B6_lap": withinBounds.select("B6_lap"),
+            "B7_lap": withinBounds.select("B7_lap"),
+            "B8_lap": withinBounds.select("B8_lap"),
+            "B8A_lap": withinBounds.select("B8A_lap"),
+            "B11_lap": withinBounds.select("B11_lap"),
+            "B12_lap": withinBounds.select("B12_lap"),
+
+ 
+            "VV": withinBounds.select("VV"),"VH": withinBounds.select("VH"),
+            "SAR_NDVI": withinBounds.select("SAR_NDVI"),
+            "SAR_Sum": withinBounds.select("SAR_Sum"),
+            "SAR_Diff": withinBounds.select("SAR_Diff"),
+            "VV_VH": withinBounds.select("VV_VH"),
+            "VV/VH": withinBounds.select("VV/VH"),
+            "VH/VV": withinBounds.select("VH/VV"),
+            "VV_var": withinBounds.select("VV_var"),
+            "VV_contrast": withinBounds.select("VV_contrast"),
+            "VV_corr": withinBounds.select("VV_corr"),
+            "VH_var": withinBounds.select("VH_var"),
+            "VH_contrast": withinBounds.select("VH_contrast"),
+            "VH_corr": withinBounds.select("VH_corr"),
+            
+            
+            
+        }).rename("class");
+
+        
+    return classifiedImage;
+};
+
+var classifiedImage_siltSand = applyRules_siltSand(IndexImagesMasked);
+
+var mask_siltSand = IndexImagesMasked.select('B5')//.mask();
+
+var maskedClassifiedImage_siltSand = classifiedImage_siltSand.updateMask(mask_siltSand);
+
+Map.addLayer( maskedClassifiedImage_siltSand,
+             {palette: ['yellow', 'red'],min: 0,max: 1,},
+             " maskedClassifiedImage_siltSand",0);
+maskedClassifiedImage_siltSand = maskedClassifiedImage_siltSand.add(1)  
+print(maskedClassifiedImage_siltSand)
+
+// // 设置导出参数-siltSand
+// var exportParams1 = {
+//   image: maskedClassifiedImage_siltSand, // 导出的图像
+//   description: 'GuangXi_YinBeach_sq_maskedClassifiedImage_siltSand_export', // 导出任务的描述
+//   scale: 10, // 导出的分辨率（以米为单位）
+//   region:  GuangXi_YinBeach_sq.bounds(), // 导出区域，此处使用遮罩的范围
+//   fileFormat: 'GeoTIFF', // 导出文件格式
+// };
+
+// // 设置导出参数-classimage-tiff
+// var exportParams1 = {
+//   image: classifiedImage, // 导出的图像
+//   description: 'AnpuPort_classifiedImage', // 导出任务的描述
+//   scale: 10, // 导出的分辨率（以米为单位）
+//   region:  AnpuPort_sq.bounds(), // 导出区域，此处使用遮罩的范围
+//   fileFormat: 'GeoTIFF', // 导出文件格式
+// };
+
+var maskedChunk = maskedClassifiedImage.clip(regionImage)
+//计算image面积
+// 将掩膜图像转换为二值图像
+var binaryImage = maskedChunk.gt(0);
+
+// 直接统计栅格面积
+var pixelArea = binaryImage.multiply(ee.Image.pixelArea()); // 单像素面积
+var totalArea = pixelArea.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: regionImage,
+  scale: 10, // 分辨率
+  maxPixels: 1e13
+}).get('constant');
+
+print('Total Area (m²):', totalArea);
+
+var maskedChunk = maskedClassifiedImage.clip(regionImage)
+print('maskedChunk',maskedChunk)
+
+// 将掩膜块减少为矢量--classimage
+var vectors = maskedChunk.reduceToVectors({
+  geometry: regionImage,
+  crs: maskedClassifiedImage.projection(),
+  scale: 10,
+  geometryType: 'polygon',
+  maxPixels: 1e13,
+  tileScale: 16
+});
+
+
+// 导出每个块的矢量数据
+Export.table.toDrive({
+  collection: vectors,
+  description: exportName + '_Classified_2020',
+  fileFormat: 'GeoJSON',
+  folder: 'TF_compare_2020'
+});
+    
+// print(image.select(['B8','B4','B3']))
+// 设置导出参数-image
+var exportParams2 = {
+  image: compositeImage.first().select(['B8','B4','B3']), // 导出的图像
+  description: exportName + '_image_2020', // 导出任务的描述
+  scale: 10, // 导出的分辨率（以米为单位）
+  region:  regionImage.bounds(), // 导出区域，此处使用遮罩的范围
+  fileFormat: 'GeoTIFF', // 导出文件格式
+};
+
+// 启动导出任务
+// Export.image.toDrive(exportParams1);
+Export.image.toDrive(exportParams2);
+
+
+//murray--全国滩涂的数据
+var dataset = ee.Image('JCU/Murray/GIC/global_tidal_wetland_change/2019');
+
+// 创建掩膜图层，只显示twprobabilityEnd大于50的区域
+var tidalWetlandMaskEnd = dataset.select('twprobabilityEnd').gt(70);
+
+
+// 定义颜色调色板
+// var plasma = [
+//   '0d0887', '3d049b', '6903a5', '8d0fa1', 'ae2891', 'cb4679', 'df6363',
+//   'f0844c', 'faa638', 'fbcc27', 'f0f921'
+// ];
+
+var plasma = ['4de600']
+// 添加图层：结束概率大于50的部分
+Map.addLayer(
+    dataset.select('twprobabilityEnd').updateMask(tidalWetlandMaskEnd), 
+    {palette: plasma, min: 0, max: 100},
+    'twprobabilityEndMasked', 0
+);

@@ -1,0 +1,670 @@
+var silt = silt1.merge(silt2).merge(silt3)//.merge(silt4)
+var mangrove = mangrove1.merge(mangrove1).merge(mangrove3)//.merge(mangrove4)
+var pool = pool1.merge(pool2)//.merge(pool3)
+var water_body = water_body1.merge(water_body2)//.merge(water_body3)
+var other = bare1.merge(bare2).merge(other)
+
+// 定义一个函数，将属性中的所有类型值更改为1
+var water_bodyTypeTo0 = function(image) {
+  return image.set('type', 0); 
+};
+
+var siltTypeTo1 = function(image) {
+  return image.set('type', 1);
+};
+
+var otherTypeTo2 = function(image) {
+  return image.set('type', 0);
+};
+
+var forestTypeTo3 = function(image) {
+  return image.set('type', 0);
+};
+
+var buildTypeTo4 = function(image) {
+  return image.set('type', 0);
+};
+
+var farmlandTypeTo5 = function(image) {
+  return image.set('type', 0);
+};
+
+// var marshTypeTo6 = function(image) {
+//   return image.set('type', 0);
+// };
+
+var mangroveTypeTo7 = function(image) {
+  return image.set('type', 0);
+};
+
+var poolTypeTo8 = function(image) {
+  return image.set('type', 0);
+};
+
+// 应用函数到图像或图像集合
+var water_body = water_body.map(water_bodyTypeTo0)
+var silt = silt.map(siltTypeTo1);
+var other = other.map(otherTypeTo2)
+var forest = forest1.map(forestTypeTo3)
+var build = build1.map(buildTypeTo4)
+var farmland = farmland1.map(farmlandTypeTo5)
+// var marsh = silt3.merge(silt4).map(marshTypeTo6)
+var mangrove = mangrove.map(mangroveTypeTo7)
+var pool = pool.map(poolTypeTo8)
+
+print('water_body',water_body.size())
+print('silt',silt.size())
+print('build',build.size())
+print('farmland',farmland.size())
+// print('marsh',marsh.size())
+print('pool',pool.size())
+print(' other', other.size())
+// print('marsh',marsh.size())
+print('mangrove',mangrove.size())
+
+var all = build.merge(water_body).merge(silt).merge(forest).merge(farmland).merge(other).merge(mangrove).merge(pool);
+// var all = add_silt
+
+// 定义时间范围 
+var startDate = ee.Date('2023-1-1');
+ 
+var endDate =  startDate.advance(1, 'year');
+
+
+var startDateS1 = ee.Date('2023-1-1');// 广西茅尾海-低潮
+var endDateS1 = startDateS1.advance(1, 'year');
+
+// 获取Sentinel-1影像集
+var sentinel = ee.ImageCollection('COPERNICUS/S1_GRD')
+  .filterBounds(all.geometry(1))
+  .filterDate(startDateS1, endDateS1)
+      // 筛选几何点都在影像内
+    // .filter(filterContainsPoint)
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+  .select(['VV', 'VH'])
+
+
+//计算像素的分位数
+var Image_sdwiP10 = sentinel.select('VV').reduce(ee.Reducer.percentile([90]));
+print('Image_sdwiP10', Image_sdwiP10);
+
+// 根据第 10 分位数选择像素并返回其他波段的值
+var Image_sdwiP10_masked = sentinel.map(function(image) {
+  var sdwi = image.select('VV');
+  var mask = sdwi.gt(Image_sdwiP10);
+  return image.updateMask(mask);
+}).select(['VV', 'VH']); // 选择其他波段
+
+print('Image_sdwiP10_masked', Image_sdwiP10_masked);
+
+var imageMedian = Image_sdwiP10_masked.median()
+
+
+
+function addIndexS1(image){
+  var vv = image.select('VV')
+  var vh = image.select('VH')
+  
+  // // 计算 ln(10 * VV * VH)
+  // var SDWI = ((vv.multiply(vh).multiply(10)).log()).subtract(8).rename("SDWI").toDouble();
+  
+  // // 计算 EXP(VV * VH / 1000)
+  // var expResult = vv.multiply(vh).divide(1000).exp().rename("expResult").toDouble();
+  
+  var SAR_Sum = vv.add(vh).rename("SAR_Sum").toDouble()
+  var SAR_Diff1 = vh.subtract(vv).rename("VH-VV").toDouble()
+  // var SAR_Diff2 = vv.subtract(vh).rename("VV-VH").toDouble()
+  var SAR_NDVI1 = (vv.subtract(vh)).divide(vv.add(vh)).rename("VV_VH").toDouble();
+  // var SAR_NDVI2 = (vh.subtract(vv)).divide(vh.add(vv)).rename("VH_VV").toDouble();
+  var vv_vh = vv.divide(vh).rename("VV/VH").toDouble()
+  var vh_vv = vh.divide(vv).rename("VH/VV").toDouble()
+return image.addBands(SAR_NDVI1).addBands(SAR_Sum).addBands(SAR_Diff1)
+            .addBands(vv_vh).addBands(vh_vv)
+// .addBands(expResult).addBands(SDWI).addBands(SAR_NDVI2).addBands(SAR_Diff2)
+}
+var sentinel1Index = addIndexS1(imageMedian)
+
+// Sentinel-1 纹理计算
+// 计算 VV 波段的 GLCM 统计数据
+var glcmS1 = imageMedian.select(['VV','VH']).toInt32().glcmTexture({
+  size: 5, // 窗口大小为 7x7
+  average: true // 计算平均值
+});
+
+var  texture = glcmS1.select(['VV_var', 'VH_var', 'VV_contrast', 'VH_contrast','VV_corr', 'VH_corr'])
+// print('texture',texture)
+
+// 计算拉普拉斯滤波器
+// 定义Laplacian滤波器
+var laplacianFilter = ee.Kernel.laplacian8();
+
+// 应用Laplacian滤波器
+var laplacianS1 = imageMedian.select(['VV','VH']).convolve(laplacianFilter);
+
+// 新的波段名称列表，加上"_lap"后缀
+var renamedBands = ['VV','VH'].map(function(band) {
+  return band + '_lap';
+});
+
+// 使用循环重命名每个波段
+laplacianS1 = laplacianS1.select(['VV','VH'], renamedBands);
+
+sentinel1Index = sentinel1Index.addBands(texture.select(texture.bandNames()))
+                               .addBands(laplacianS1)
+print('sentinelIndex',sentinel1Index)
+
+
+// 去云处理，使用云评分+bandQ60
+// Cloud Score+ image collection. Note Cloud Score+ is produced from Sentinel-2
+// Level 1C data and can be applied to either L1C or L2A collections.
+var csPlus = ee.ImageCollection('GOOGLE/CLOUD_SCORE_PLUS/V1/S2_HARMONIZED');
+
+// Use 'cs' or 'cs_cdf', depending on your use-case; see docs for guidance.
+var QA_BAND = 'cs_cdf';
+
+// The threshold for masking; values between 0.50 and 0.65 generally work well.
+// Higher values will remove thin clouds, haze & cirrus shadows.
+var CLEAR_THRESHOLD = 0.6;
+
+// 创建一个过滤器，确保点几何体完全包含在影像边界内
+var filterContainsPoint = ee.Filter.contains({
+  leftField: '.geo',
+  rightValue: all.geometry()
+});
+
+
+// // 导入SRTM数字高程模型数据集--创建遮罩dem<5,坡度<5
+// var dem = ee.Image("CGIAR/SRTM90_V4");
+// // 计算坡度
+// var slope = ee.Terrain.slope(dem);
+// // 创建 DEM 小于 5 米的遮罩
+// var demMask = dem.lt(5);
+// // 创建坡度小于 5 度的遮罩
+// var slopeMask = slope.lt(5);
+// // 组合两个遮罩，取交集
+// var combinedMask = demMask//.and(slopeMask);
+
+// 获取Sentinel-2影像数据集
+var imageCollection = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+    .filterBounds(all.geometry())
+    .filterDate(startDate, endDate)
+    .filterMetadata('CLOUDY_PIXEL_PERCENTAGE', 'less_than', 30)
+    // 筛选几何点都在影像内
+    .filter(filterContainsPoint)
+    // 去云处理
+    .linkCollection(csPlus, [QA_BAND])
+    .map(function(img) {
+      return img.updateMask(img.select(QA_BAND).gte(CLEAR_THRESHOLD));
+    })
+    // // 创建遮罩dem<5,坡度<5
+    // .map(function(image) {
+    //   return image.updateMask(combinedMask);
+    // });
+
+    
+// print('sentinel-2_image',imageCollection)
+
+// // 筛选云层含量低于50%的影像
+// var filteredImages = imageCollection.filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 50));
+
+// 根据样本NDVI前20%合成中值影像图
+// 定义 NDVI 计算函数
+var calculateNDVI = function(image) {
+  return image.normalizedDifference(['B8', 'B4']).rename('NDVI');
+};
+
+// 计算每一幅影像的 NDVI，并提取样本点的值
+var ndviCollection = imageCollection.map(function(image) {
+  var ndvi = calculateNDVI(image);
+  var ndviValue = ndvi.reduceRegion(ee.Reducer.mean(), silt, 10).get('NDVI');
+  return image.set('mean_ndvi', ndviValue);
+});
+
+// 计算样本点 NDVI 的平均值
+var meanNDVI = ndviCollection.aggregate_mean('mean_ndvi');
+
+// 按 NDVI 排序影像集合
+var sortedCollection = ndviCollection.sort('mean_ndvi',false);
+
+// 计算前 10% 的影像数目
+var numImages = sortedCollection.size().getInfo();
+var numImagesToComposite = Math.ceil(numImages * 0.1);
+
+// 获取前 10% 的影像
+var topImages = sortedCollection.limit(numImagesToComposite);
+print('topImages',topImages)
+
+// 定义目标分辨率
+var targetResolution = 10;
+
+// 定义需要执行操作的波段
+var bands_ori = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B8A', 'B11', 'B12'];
+
+// 定义重采样函数
+var resampleToTargetResolution = function(img) {
+  // 检查每个波段的分辨率是否是目标分辨率
+  var resampledBands = bands_ori.map(function(band) {
+    var originalResolution = img.select(band).projection().nominalScale();
+    // 如果分辨率不是目标分辨率，则进行重采样
+    if (originalResolution !== targetResolution) {
+      return img.select(band).resample('bilinear').reproject({
+        crs: img.select(band).projection(),
+        scale: targetResolution
+      });
+    } else {
+      return img.select(band);
+    }
+  });
+  
+  // 将重采样后的波段重新组合成图像
+  return ee.Image(resampledBands).copyProperties(img, img.propertyNames());
+};
+
+// 对图像集进行重采样
+topImages = topImages.map(function(image) {
+  return resampleToTargetResolution(image);
+});
+
+// 获取第一幅图像中每个波段的投影信息
+var bandProjections = bands_ori.map(function(band) {
+  return topImages.first().select(band).projection().nominalScale();
+});
+
+// 打印每个波段的分辨率
+print('Band resolutions:', bandProjections.slice(0, 5));
+
+// 取样一个影像以获取形状和地理位置信息
+var sampleImage = topImages.first();
+
+// 复制形状和地理位置信息到 compositeImage
+var compositeImage = ee.Image(ee.Image(topImages.reduce(ee.Reducer.median()))
+  .copyProperties(sampleImage, sampleImage.propertyNames()));
+var compositeImageName = compositeImage.bandNames()
+
+// 获取第一幅影像的波段名称
+var originalBands = topImages.first().bandNames();
+
+// 将合成图像的波段名称设置为原始影像的波段名称
+compositeImage = ee.ImageCollection(compositeImage.select(compositeImageName,originalBands));
+print('compositeImage',compositeImage)
+
+
+// 1. 获取DEM数据集
+var dem = ee.Image('USGS/SRTMGL1_003');
+
+// 计算坡度
+var slope = ee.Terrain.slope(dem);
+
+// // 2. 创建DEM小于5的遮罩
+// var demMask = dem.lte(5);
+
+// // 3. 将DEM遮罩应用到Sentinel-2影像上
+// var maskedCollection = compositeImage.map(function(img) {
+//   // 将DEM遮罩应用到影像上
+//   var maskedImg = img.updateMask(demMask);
+  
+//   // 获取影像中DEM值小于5的区域
+//   var demArea = demMask.reduceRegion({
+//     reducer: ee.Reducer.anyNonZero(),
+//     geometry: img.geometry(),
+//     scale: 10,
+//     bestEffort: true
+//   }).values().get(0);
+  
+//   // 如果DEM小于5的区域存在，则保留影像，否则不保留
+//   return ee.Algorithms.If({
+//     condition: demArea,
+//     trueCase: maskedImg,
+//     falseCase: ee.Image().byte()
+//   });
+// });
+
+// // 移除空影像
+// maskedCollection = maskedCollection.filter(ee.Filter.neq('system:index', ''));
+
+var maskedCollection = compositeImage
+
+//定义计算指数
+function addIndex(image){ 
+  // 添加DEM数据集
+    image = image.addBands(dem);
+
+    // 计算坡度
+    image = image.addBands(slope);
+    
+   // original bands
+    var blue = image.select('B2').rename("blue").toDouble(); 
+    var green  = image.select('B3').rename("green").toDouble();
+    var red = image.select('B4').rename("red").toDouble();
+    var redEdge1 = image.select('B5').rename("redEdge1").toDouble();
+    var redEdge2 = image.select('B6').rename("redEdge2").toDouble();
+    var redEdge3 = image.select('B7').rename("redEdge3").toDouble();
+    var nir = image.select('B8').rename("nir").toDouble();
+    var redEdge4 = image.select('B8A').rename("redEdge4").toDouble();
+    var swir1 = image.select('B11').rename("swir1").toDouble();
+    var swir2 = image.select('B12').rename("swir2").toDouble();
+     
+  var ndvi = image.normalizedDifference(['B8','B4']).rename("NDVI").toDouble();
+  // var ndwi = image.normalizedDifference(['B3','B8']).rename("NDWI").toDouble();
+  
+  var evi = image.expression(
+      '2.5 * ((NIR - RED) / (NIR + 6 * RED - 7.5 * BLUE + 1))', {
+        'NIR': nir,
+        'RED': red,
+        'BLUE':blue
+    }).rename("EVI").toDouble();//增强型植被指数（EVI）
+  var rgvi = ((red.subtract(green)).divide(red.add(green))).rename("RGVI").toDouble()//红绿植被指数RGVI
+  var rendvi = ((redEdge2.subtract(redEdge1)).divide(redEdge2.add(redEdge1))).rename("RENDVI").toDouble()//红边归一化植被指数(RENDVI)
+  var reci = ((nir.divide(redEdge1)).subtract(1)).rename("RECI").toDouble()//红边叶绿素指数(RECI)
+  var ndre1 = ((nir.subtract(redEdge1)).divide(nir.add(redEdge1))).rename("NDRE1").toDouble()//归一化差值红边指数（NDRE1）
+  // var salinity = green.divide(red).rename('salinity').toDouble();
+  var ipvi = nir.divide(nir.add(red)).rename("IPVI").toDouble(); //红外植被指数
+  
+  // 计算AWEI
+var awei = image.expression(
+    '(4 * (green - swir1)) - ((0.25 * nir) + (2.75 * swir2))', {
+        'green': green,
+        'swir1': swir1,
+        'nir': nir,
+        'swir2': swir2
+}).rename("AWEI").toDouble();
+
+//   // Add LSWI
+// var lswi = image.normalizedDifference(['B8','B11']).rename("LSWI").toDouble();
+
+// Add Tidalflats
+var mndwi = image.normalizedDifference(['B3','B11']).rename("mNDWI").toDouble();
+var tf = mndwi.multiply(sentinel1Index.select('VH')).rename("TF").toDouble()
+
+// Add SAVI -土壤调整植被指数
+var savi = (nir.subtract(red).multiply(1.5)).divide(nir.add(red).add(0.5)).rename('SAVI').toDouble();
+
+// Add GDVI --广义差异植被指数
+var gdvi = (nir.pow(2).subtract(red.pow(2))).divide(nir.pow(2).add(red.pow(2))).rename('GDVI').toDouble();
+
+// Add EEVI --扩展增强植被指数
+var eevi = (nir.add(swir2).subtract(red))
+            .divide(nir.add(swir2).add(red.multiply(6)).subtract(blue.multiply(7.5)).add(1))
+            .multiply(2.5)
+            .rename('EEVI').toDouble();
+            
+// Add BI --亮度指数         
+var bi = (red.pow(2).add(nir.pow(2))).sqrt().rename('BI').toDouble();
+
+// Add SI -- 盐度指数
+var si = (blue.add(red)).sqrt().rename('SI').toDouble();
+
+// Add mSAVI-增强土壤调整植被指数
+var msavi = image.expression(
+    '((2 * NIR + 1) - sqrt(pow((2 * NIR + 1), 2) - 8 * (NIR - RED))) / 2', {
+        'NIR': nir,
+        'RED': red
+}).rename("MSAVI").toDouble();
+
+// Tasseled Cap Transformation for Soil Brightness
+var soilBrightness = image.expression(
+    '0.3037 * B2 + 0.2793 * B3 + 0.4743 * B4 + 0.5585 * B8 + 0.5082 * B11 + 0.1863 * B12', {
+        'B2': blue,
+        'B3': green,
+        'B4': red,
+        'B8': nir,
+        'B11': swir1,
+        'B12': swir2
+}).rename("SoilBrightness").toDouble();
+
+// Add bsi --裸土指数
+var bsi = (swir2.add(red).subtract(nir.add(blue))).divide(swir2.add(red).add(nir.add(blue))).rename('BSI').toDouble();
+
+// Add bsi1 --裸土指数
+var bsi1 = (swir1.add(red).subtract(nir.add(blue))).divide(swir1.add(red).add(nir.add(blue))).rename('BSI1').toDouble();
+
+// // Add bsi2 --裸土指数
+// var bsi2 = ((swir2.subtract(green)).divide(swir2.add(green))).sqrt().multiply(100).rename('BSI2').toDouble();
+            
+// Add bsi3 --裸土指数
+var bsi3 = (swir1.add(red).subtract(nir.add(blue))).divide(swir1.add(red).add(nir.add(blue)))
+            .multiply(100).add(100).rename('BSI3').toDouble();
+
+// Add bni --裸露指数            
+var bni = (red.add(swir1).subtract(nir)).rename('BNI').toDouble();
+
+// Add dbsi -- 干裸土指数
+var dbsi = swir1.subtract(green).divide(swir1.add(green))
+            .subtract(nir.subtract(red).divide(nir.add(red)))
+            .rename('DBSI').toDouble();
+            
+// Add ndsi1  --归一化土壤指数1(NDSI1)
+var ndsi1 = image.normalizedDifference(['B11','B8']).rename("NDSI1").toDouble();
+
+// Add ndsi2  --归一化土壤指数2(NDSI2)
+var ndsi2 = image.normalizedDifference(['B12','B3']).rename("NDSI2").toDouble();
+
+// Add dvi --差值植被指数DVI(B8-B4)
+var dvi = nir.subtract(red).rename("DVI").toDouble()
+
+return image.addBands(evi).addBands(reci).addBands(ndre1).addBands(msavi).addBands(soilBrightness)
+              .addBands(awei).addBands(savi).addBands(rgvi).addBands(ndvi).addBands(rendvi)
+              .addBands(gdvi).addBands(eevi).addBands(bi).addBands(si)
+              .addBands(ipvi)
+              .addBands(bsi).addBands(bsi1).addBands(bsi3).addBands(bni).addBands(dbsi)
+              .addBands(tf).addBands(ndsi1).addBands(ndsi2).addBands(dvi)
+              // .addBands(ndwi).addBands(lswi).addBands(mndwi).addBands(salinity)
+              // .addBands(blue).addBands(green).addBands(red).addBands(nir)
+              // .addBands(redEdge1).addBands(redEdge2).addBands(redEdge3).addBands(redEdge4)
+              // .addBands(swir1).addBands(swir2);
+}
+
+// 缨帽变化中湿度的绿色差异
+var addTCWGD = function(image){
+  var TCW = image.expression(
+    '(0.2578*BLUE)+(0.2305*GREEN)+(0.0883*RED)+(0.1071*NIR)+(-0.7611*SWIR1)+(-0.5308*SWIR2)',{
+      'BLUE': image.select('B2'),
+      'GREEN': image.select('B3'),
+      'RED': image.select('B4'),
+      'NIR': image.select('B8'),
+      'SWIR1': image.select('B11'),
+      'SWIR2': image.select('B12')
+    })
+
+  var TCG = image.expression(
+      '(-0.3599*BLUE)+(-0.3533*GREEN)+(-0.4734*RED)+(0.6633*NIR)+(0.0087*SWIR1)+(-0.2856*SWIR2)',{
+        'BLUE': image.select('B2'),
+        'GREEN': image.select('B3'),
+        'RED': image.select('B4'),
+        'NIR': image.select('B8'),
+        'SWIR1': image.select('B11'),
+        'SWIR2': image.select('B12')
+      })
+  var TCWGD = TCW.subtract(TCG).rename('TCWGD');
+  return image.addBands(TCWGD);
+};
+
+function addIndex_other(image){ 
+ // 添加新的指数
+    var bandCombinations = [
+        ['B2', 'B3'],   // Blue-Green
+        ['B2', 'B4'],   // Blue-Red      盐度指数A(blue/red)
+        ['B2', 'B5'],   // Blue-RedEdge1
+        ['B2', 'B6'],   // Blue-RedEdge2
+        ['B2', 'B7'],   // Blue-RedEdge3
+        ['B2', 'B8'],   // Blue-NIR
+        ['B2', 'B8A'],  // Blue-RedEdge4
+        ['B2', 'B11'],  // Blue-SWIR1
+        ['B2', 'B12'],  // Blue-SWIR2    
+        ['B3', 'B4'],   // Green-Red       红绿植被归一化指数RGVI(Red-Green)*;salinity(green/red)
+        ['B3', 'B5'],   // Green-RedEdge1
+        ['B3', 'B6'],   // Green-RedEdge2
+        ['B3', 'B7'],   // Green-RedEdge3
+        ['B3', 'B8'],   // Green-NIR          --ndwi归一化指数(B3-B8)
+        ['B3', 'B8A'],  // Green-RedEdge4
+        ['B3', 'B11'],  // Green-SWIR1        mNDWI归一化指数(B3-B11)
+        ['B3', 'B12'],  // Green-SWIR2        归一化土壤指数2-NDSI2(SWIR2−G)*
+        ['B4', 'B5'],   // Red-RedEdge1     盐度指数归一化指数SI(B4-B5)
+        ['B4', 'B6'],   // Red-RedEdge2
+        ['B4', 'B7'],   // Red-RedEdge3
+        ['B4', 'B8'],   // Red-NIR            --NDVI归一化指数(B8-B4)*;比值植被指数RVI(B8/B4);差值植被指数DVI(B8-B4)*
+        ['B4', 'B8A'],  // Red-RedEdge4
+        ['B4', 'B11'],  // Red-SWIR1
+        ['B4', 'B12'],  // Red-SWIR2
+        ['B5', 'B6'],   // RedEdge1-RedEdge2    红边归一化植被指数RENDVI(redEdge2- redEdge1)
+        ['B5', 'B7'],   // RedEdge1-RedEdge3
+        ['B5', 'B8'],   // RedEdge1-NIR
+        ['B5', 'B8A'],  // RedEdge1-RedEdge4
+        ['B5', 'B11'],  // RedEdge1-SWIR1
+        ['B5', 'B12'],  // RedEdge1-SWIR2
+        ['B6', 'B7'],   // RedEdge2-RedEdge3
+        ['B6', 'B8'],   // RedEdge2-NIR
+        ['B6', 'B8A'],  // RedEdge2-RedEdge4
+        ['B6', 'B11'],  // RedEdge2-SWIR1
+        ['B6', 'B12'],  // RedEdge2-SWIR2
+        ['B7', 'B8'],   // RedEdge3-NIR
+        ['B7', 'B8A'],  // RedEdge3-RedEdge4
+        ['B7', 'B11'],  // RedEdge3-SWIR1
+        ['B7', 'B12'],  // RedEdge3-SWIR2
+        ['B8', 'B8A'],  // NIR-RedEdge4
+        ['B8', 'B11'],  // NIR-SWIR1          LSWI归一化指数(B8-B11) ; 归一化土壤指数NDSI1(swir1-nir)
+        ['B8', 'B12'],  // NIR-SWIR2
+        ['B8A', 'B11'], // RedEdge4-SWIR1
+        ['B8A', 'B12'], // RedEdge4-SWIR2
+        ['B11', 'B12']  // SWIR1-SWIR2
+    ];
+
+
+    bandCombinations.forEach(function(bands){
+        var band1= bands[0];
+        var band2 = bands[1];
+        
+        var indexName1 = bands.join('_')//.replace('B', ''); // Generate index name
+        var index1 = image.normalizedDifference(bands).rename(indexName1).toDouble();
+        
+        // var indexName2 = band2 + '_' + band1;
+        // var index2 = image.normalizedDifference([band2,band1]).rename(indexName2).toDouble();
+        
+        var indexName3 = bands.join('/'); // Generate index name
+        var numerator = image.select(bands[0]);
+        var denominator = image.select(bands[1]);
+        var index3 = numerator.divide(denominator).rename(indexName3).toDouble();
+        
+        var indexName4 = band2 + '/' + band1; // Generate index name
+        var index4 = denominator.divide(numerator).rename(indexName4).toDouble();
+        
+        var indexName5 = band2 + '-' + band1; // Generate index name
+        var index5 = denominator.subtract(numerator).rename(indexName5).toDouble();
+        
+        // var indexName6 = band1 + '-' + band2; // Generate index name
+        // var index6 = numerator.subtract(denominator).rename(indexName6).toDouble();
+        
+        var indexName7 = band1 + '_plus_' + band2; // Generate index name
+        var index7 = numerator.add(denominator).rename(indexName7).toDouble();
+        
+        image = image.addBands(index1).addBands(index3).addBands(index4)
+                     .addBands(index5).addBands(index7);
+                    // .addBands(index6).addBands(index2)
+                     
+    });
+    
+    return image;
+}
+
+// 计算灰度共生矩阵纹理特征
+var maskedCollection32 = maskedCollection.first().select(bands_ori).toInt32()
+var glcmTextureS2 = maskedCollection32.select(bands_ori).glcmTexture({
+  size: 5, // 窗口大小为 5x5
+  average: true // 计算平均值
+});
+
+var glcmS2MergedImage = ee.Image(0);
+// 遍历每个波段，分别提取标准差和对比度
+bands_ori.forEach(function(band) {
+  // 选择当前波段的标准差和对比度
+  var varBand = glcmTextureS2.select(band + '_var');
+  var corrBand = glcmTextureS2.select(band + '_corr');
+  var contrastBand = glcmTextureS2.select(band + '_contrast');
+  
+  // 合并当前波段的标准差和对比度到一个图像
+  var mergedBand = varBand.addBands(corrBand).addBands(contrastBand);
+  glcmS2MergedImage = glcmS2MergedImage.addBands(mergedBand);
+});
+
+// 选择除了"constant"以外的所有波段
+var bandsToKeep = glcmS2MergedImage.bandNames().filter(ee.Filter.neq('item', 'constant'));
+
+// 选择需要保留的波段
+glcmS2MergedImage = glcmS2MergedImage.select(bandsToKeep);
+// 打印结果
+print('GLCM Texture:', glcmS2MergedImage);
+
+// 计算拉普拉斯滤波器
+// 定义Laplacian滤波器
+var laplacianFilter = ee.Kernel.laplacian8();
+
+// 应用Laplacian滤波器
+var laplacianS2 = maskedCollection.first().select(bands_ori).convolve(laplacianFilter);
+
+// 新的波段名称列表，加上"_lap"后缀
+var renamedBands = bands_ori.map(function(band) {
+  return band + '_lap';
+});
+
+// 使用循环重命名每个波段
+laplacianS2 = laplacianS2.select(bands_ori, renamedBands);
+// print(laplacian)
+
+// 在每个影像上计算VI
+var IndexImages = maskedCollection.map(addIndex).map(addTCWGD).map(addIndex_other)
+
+print('Images_addIndex',IndexImages)
+// Map.centerObject(point,15)
+Map.addLayer(IndexImages,{"bands":["B4","B3","B2"],"max":3000,"gamma":1},'RGB')
+Map.addLayer(IndexImages,{"bands":["B8","B4","B3"],"max":3000,"gamma":1},'Color infrared band')
+Map.addLayer(IndexImages,{"bands":["B12","B8","B4"],"max":3000,"gamma":1},'shortwave infrared band')
+
+// 获得sentinel-1的波段名称，并合并波段
+var Sentinel1_bandNames = sentinel1Index.bandNames()
+IndexImages = ee.ImageCollection(IndexImages.first().addBands(sentinel1Index.select(Sentinel1_bandNames))
+                                                    .addBands(glcmS2MergedImage)
+                                                    .addBands(laplacianS2))
+
+// var classNames = silt.merge(forest).merge(farmland)//
+// var classNames = other.merge(mangrove).merge(pool).merge(build).merge(water_body)
+ var classNames = all
+print('classNames',classNames)
+
+Sentinel1_bandNames = Sentinel1_bandNames.getInfo()
+print('Sentinel1_bandNames',Sentinel1_bandNames)
+
+var SentinelS1_2_bandNames = ee.Image(IndexImages.first()).bandNames().getInfo()
+
+var bands = SentinelS1_2_bandNames
+
+print('bandName',bands)
+
+var image = IndexImages.first().clip(geometry)
+
+// var scale1 = image.select('B2').projection().nominalScale();
+
+// 还会对其余周围的像素叠加到样本点中，样本点数量会增加
+var allTraining =IndexImages.map(function(image){
+var training = image.select(bands).sampleRegions({
+  collection:classNames , //当时polygon时会自动生成多个点，当时point时只有一个点
+  properties: ['type'],
+  scale: 10,
+  tileScale: 3
+  // tileScale: 1, 
+    // geometries: true,
+});
+return training
+})
+
+print('training',allTraining)
+
+var trainingFilter = allTraining.flatten().filter(ee.Filter.notNull(['B2']));
+print('training',allTraining.flatten().size())
+print('trainingFilter',trainingFilter.size())
+
+Export.table.toDrive({
+ collection: trainingFilter, // 你的样本点 FeatureCollection
+ description: 'training_MaoWeiSea', // 文件名
+ fileFormat: 'csv'
+});
